@@ -1,0 +1,20 @@
+googlechat:
+  # Google Chat Webhook URL
+  # 環境変数 GCHAT_WEBHOOK_URL で上書き可能
+  webhook_url: ""
+  # HTTPリクエストタイムアウト（秒）
+  timeout: 10
+  # 送信失敗時の最大リトライ回数
+  max_retries: 3
+  # リトライ間隔（秒）- 指数バックオフの基準値
+  retry_delay: 1.0
+
+zabbix:
+  # ZabbixサーバーのベースURL
+  url: "https://zabbix.example.com"
+
+logging:
+  # ログレベル: DEBUG, INFO, WARNING, ERROR
+  level: INFO
+  # ログファイルパス（省略時は標準出力）
+  # file: /var/log/zabbix-googlechat/notify.log

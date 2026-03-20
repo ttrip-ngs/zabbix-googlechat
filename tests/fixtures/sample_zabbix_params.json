@@ -1,0 +1,23 @@
+{
+  "problem": {
+    "argv": [
+      "https://chat.googleapis.com/v1/spaces/test/messages?key=test",
+      "[PROBLEM] CPU使用率が高い - web01.example.com",
+      "ALERT_TYPE=PROBLEM\nHOST_NAME=web01.example.com\nTRIGGER_NAME=CPU使用率が高い\nTRIGGER_DESCRIPTION=CPU使用率が90%を超えた\nTRIGGER_SEVERITY=High\nEVENT_ID=12345\nEVENT_DATE=2026.03.11\nEVENT_TIME=18:00:00\nZABBIX_URL=https://zabbix.example.com\nITEM_LASTVALUE=95%"
+    ]
+  },
+  "recovery": {
+    "argv": [
+      "https://chat.googleapis.com/v1/spaces/test/messages?key=test",
+      "[RECOVERY] CPU使用率が高い - web01.example.com",
+      "ALERT_TYPE=RECOVERY\nHOST_NAME=web01.example.com\nTRIGGER_NAME=CPU使用率が高い\nTRIGGER_SEVERITY=High\nEVENT_ID=12345\nEVENT_DATE=2026.03.11\nEVENT_TIME=18:00:00\nRECOVERY_DATE=2026.03.11\nRECOVERY_TIME=18:30:00\nZABBIX_URL=https://zabbix.example.com\nITEM_LASTVALUE=45%"
+    ]
+  },
+  "update": {
+    "argv": [
+      "https://chat.googleapis.com/v1/spaces/test/messages?key=test",
+      "[UPDATE] CPU使用率が高い - web01.example.com",
+      "ALERT_TYPE=UPDATE\nHOST_NAME=web01.example.com\nTRIGGER_NAME=CPU使用率が高い\nTRIGGER_SEVERITY=High\nEVENT_ID=12345\nEVENT_DATE=2026.03.11\nEVENT_TIME=18:00:00\nACK_AUTHOR=admin\nACK_MESSAGE=調査中\nZABBIX_URL=https://zabbix.example.com"
+    ]
+  }
+}
