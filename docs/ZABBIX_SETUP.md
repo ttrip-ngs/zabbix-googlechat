@@ -16,7 +16,7 @@
 
 ```bash
 # リポジトリを取得
-git clone https://github.com/your-org/zabbix-googlechat.git
+git clone https://github.com/ttrip-ngs/zabbix-googlechat.git
 cd zabbix-googlechat
 
 # インストール（root 権限が必要）

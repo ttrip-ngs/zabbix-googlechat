@@ -5,7 +5,7 @@
 ### 1.1 リポジトリのクローン
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/ttrip-ngs/zabbix-googlechat.git
 cd zabbix-googlechat
 git checkout dev
 ```
