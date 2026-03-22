@@ -13,6 +13,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.scripts]
+zabbix-googlechat-notify = "zabbix_googlechat.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
