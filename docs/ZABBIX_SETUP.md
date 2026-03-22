@@ -10,6 +10,21 @@
 
 ## 2. スクリプトの配置
 
+### 2.0 自動インストール（推奨）
+
+`install.sh` を使うと以下を自動的に実行する:
+
+```bash
+# リポジトリを取得
+git clone https://github.com/your-org/zabbix-googlechat.git
+cd zabbix-googlechat
+
+# インストール（root 権限が必要）
+sudo bash scripts/install.sh
+```
+
+手動でインストールする場合は以下の手順に従う。
+
 ### 2.1 alertscriptsディレクトリの確認
 
 Zabbixの外部スクリプトディレクトリを確認する。デフォルトは `/usr/lib/zabbix/alertscripts`。
@@ -19,44 +34,48 @@ grep AlertScriptsPath /etc/zabbix/zabbix_server.conf
 # 例: AlertScriptsPath=/usr/lib/zabbix/alertscripts
 ```
 
-### 2.2 スクリプトのコピー
+### 2.2 パッケージのインストール
+
+```bash
+pip install zabbix-googlechat
+```
+
+仮想環境を使用する場合:
+
+```bash
+python3 -m venv /opt/zabbix-googlechat/venv
+/opt/zabbix-googlechat/venv/bin/pip install zabbix-googlechat
+```
+
+仮想環境を使用する場合、スクリプト1行目のshebangを仮想環境のPythonに変更する:
+
+```python
+#!/opt/zabbix-googlechat/venv/bin/python3
+```
+
+### 2.3 スクリプトのコピー
 
 ```bash
 cp scripts/zabbix_notify.py /usr/lib/zabbix/alertscripts/
 chmod +x /usr/lib/zabbix/alertscripts/zabbix_notify.py
 ```
 
-### 2.3 依存ライブラリのインストール
-
-```bash
-pip3 install requests pyyaml python-dotenv
-```
-
-システムのPythonに直接インストールできない場合は仮想環境を使用する:
-
-```bash
-python3 -m venv /opt/zabbix-googlechat/venv
-/opt/zabbix-googlechat/venv/bin/pip install requests pyyaml python-dotenv
-```
-
-仮想環境を使用する場合、スクリプト1行目のshebangを変更する:
-
-```python
-#!/opt/zabbix-googlechat/venv/bin/python3
-```
-
 ### 2.4 設定ファイルの配置
 
 ```bash
-# スクリプトのひとつ上のディレクトリにconfigディレクトリを作成
-mkdir -p /usr/lib/zabbix/config
-cp config/config.yaml.example /usr/lib/zabbix/config/config.yaml
+sudo mkdir -p /etc/zabbix-googlechat
+sudo cp config/config.yaml.example /etc/zabbix-googlechat/config.yaml
 
 # Webhook URLを設定
-vi /usr/lib/zabbix/config/config.yaml
+sudo vi /etc/zabbix-googlechat/config.yaml
 ```
 
-スクリプトは `{スクリプトのディレクトリ}/../config/config.yaml` を自動検出する。
+設定ファイルの探索順序（優先度順）:
+
+1. 環境変数 `ZABBIX_GOOGLECHAT_CONFIG` で明示指定
+2. `/etc/zabbix-googlechat/config.yaml`（FHS標準パス）
+3. カレントディレクトリの `config/config.yaml`
+4. 設定ファイルなし（環境変数 `GCHAT_WEBHOOK_URL` のみで動作）
 
 ---
 

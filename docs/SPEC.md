@@ -35,37 +35,43 @@ Zabbix Server
     │ scripts/zabbix_notify.py を呼び出し
     │ 引数: {ALERT.SENDTO} {ALERT.SUBJECT} {ALERT.MESSAGE}
     ▼
-scripts/zabbix_notify.py  ← エントリポイント
+scripts/zabbix_notify.py  ← Zabbix alertscripts エントリポイント（薄いラッパー）
     │
-    ├─[1] ZabbixParamParser.parse_argv()   ← コマンドライン引数・メッセージ本文解析
-    │         src/zabbix_googlechat/parser.py
-    │
-    ├─[2] NotificationConfig.load()        ← 設定読込（優先順位制御）
-    │         src/zabbix_googlechat/config.py
-    │
-    ├─[3] GoogleChatCardBuilder.build()    ← Card v2ペイロード構築
-    │         src/zabbix_googlechat/card_builder.py
-    │
-    └─[4] GoogleChatWebhookSender.send()   ← Webhook送信（リトライ制御）
-              src/zabbix_googlechat/webhook_sender.py
-                  │
-                  ▼
-              Google Chat Webhook API
+    └── zabbix_googlechat.cli.main()   ← CLIロジック（pip install で配置）
+            │
+            ├─[1] ZabbixParamParser.parse_argv()   ← コマンドライン引数・メッセージ本文解析
+            │         src/zabbix_googlechat/parser.py
+            │
+            ├─[2] _find_config_path()              ← 設定ファイル探索
+            │         src/zabbix_googlechat/cli.py
+            │
+            ├─[3] NotificationConfig.load()        ← 設定読込（優先順位制御）
+            │         src/zabbix_googlechat/config.py
+            │
+            ├─[4] GoogleChatCardBuilder.build()    ← Card v2ペイロード構築
+            │         src/zabbix_googlechat/card_builder.py
+            │
+            └─[5] GoogleChatWebhookSender.send()   ← Webhook送信（リトライ制御）
+                      src/zabbix_googlechat/webhook_sender.py
+                          │
+                          ▼
+                      Google Chat Webhook API
 ```
 
 ### 2.2 モジュール依存関係
 
 ```
 scripts/zabbix_notify.py
-    ├── zabbix_googlechat.parser        (ZabbixParamParser)
-    │       └── zabbix_googlechat.models  (ZabbixEvent, AlertType, Severity)
-    │       └── zabbix_googlechat.exceptions (ParseError)
-    ├── zabbix_googlechat.config        (NotificationConfig)
-    │       └── zabbix_googlechat.exceptions (ConfigurationError)
-    ├── zabbix_googlechat.card_builder  (GoogleChatCardBuilder)
-    │       └── zabbix_googlechat.models
-    └── zabbix_googlechat.webhook_sender (GoogleChatWebhookSender)
-            └── zabbix_googlechat.exceptions (WebhookConnectionError, WebhookPayloadError)
+    └── zabbix_googlechat.cli           (main)
+            ├── zabbix_googlechat.parser        (ZabbixParamParser)
+            │       └── zabbix_googlechat.models  (ZabbixEvent, AlertType, Severity)
+            │       └── zabbix_googlechat.exceptions (ParseError)
+            ├── zabbix_googlechat.config        (NotificationConfig)
+            │       └── zabbix_googlechat.exceptions (ConfigurationError)
+            ├── zabbix_googlechat.card_builder  (GoogleChatCardBuilder)
+            │       └── zabbix_googlechat.models
+            └── zabbix_googlechat.webhook_sender (GoogleChatWebhookSender)
+                    └── zabbix_googlechat.exceptions (WebhookConnectionError, WebhookPayloadError)
 ```
 
 ---
@@ -302,7 +308,38 @@ Google Chat Webhook APIへのHTTP POST送信クライアント。
 | `elapsed_ms` | float | 送信所要時間（ms） |
 | `error_message` | str | エラーメッセージ（失敗時） |
 
-### 3.6 exceptions.py
+### 3.6 cli.py
+
+#### _find_config_path()
+
+設定ファイルのパスを以下の順序で探索する関数。
+
+| 優先度 | 探索対象 | 条件 |
+|---|---|---|
+| 1 | 環境変数 `ZABBIX_GOOGLECHAT_CONFIG` | 環境変数が設定されている場合 |
+| 2 | `/etc/zabbix-googlechat/config.yaml` | ファイルが存在する場合 |
+| 3 | `config/config.yaml`（カレントディレクトリ相対） | ファイルが存在する場合 |
+| 4 | `None`（設定ファイルなし） | いずれも存在しない場合 |
+
+環境変数 `ZABBIX_GOOGLECHAT_CONFIG` が設定されているが、指定パスが存在しない場合は警告を出力して `None` を返す（他のパスへのフォールバックは行わない）。
+
+#### setup_logging(config)
+
+`NotificationConfig` の `log_level` と `log_file` を基にロギングを設定する。
+
+- `log_file` が設定されていない場合: 標準エラー出力のみ
+- `log_file` が設定されている場合: 標準エラー出力 + ファイル出力
+- `log_file` が開けない場合: 警告を出力して標準エラー出力のみで続行
+
+`force=True` で既存のハンドラを上書きし、設定ファイルのログレベルを確実に反映する。
+
+#### main()
+
+CLIエントリポイント。`zabbix-googlechat-notify` コマンドとして実行される。
+
+処理フロー、終了コードは「4. エントリポイント仕様」を参照。
+
+### 3.7 exceptions.py
 
 #### 例外クラス階層
 
@@ -322,9 +359,19 @@ ZabbixGoogleChatError (基底例外)
 
 ### 4.1 呼び出し形式
 
+**CLIコマンド（pip install 後に利用可能）:**
+
+```
+zabbix-googlechat-notify <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
+```
+
+**Zabbix alertscripts ラッパー（`scripts/zabbix_notify.py`）:**
+
 ```
 zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 ```
+
+両者は同一の処理（`zabbix_googlechat.cli.main()`）を呼び出す。
 
 ### 4.2 処理フロー
 
@@ -333,15 +380,21 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
    ├── 失敗 → stderr出力 → 終了コード3
    └── 成功 → ZabbixEvent生成
 
-2. 設定読込 (NotificationConfig.load + validate)
+2. 設定ファイル探索 (_find_config_path)
+   ├── ZABBIX_GOOGLECHAT_CONFIG 環境変数
+   ├── /etc/zabbix-googlechat/config.yaml
+   ├── config/config.yaml（カレントディレクトリ）
+   └── None（設定ファイルなし）
+
+3. 設定読込 (NotificationConfig.load + validate)
    ├── 失敗 → stderr出力 → 終了コード1
    └── 成功 → NotificationConfig生成
 
-3. ログ設定再適用 (setup_logging)
+4. ログ設定再適用 (setup_logging)
 
-4. Card v2ペイロード構築 (GoogleChatCardBuilder.build)
+5. Card v2ペイロード構築 (GoogleChatCardBuilder.build)
 
-5. Webhook送信 (GoogleChatWebhookSender.send)
+6. Webhook送信 (GoogleChatWebhookSender.send)
    ├── WebhookPayloadError → stderr出力 → 終了コード2
    ├── WebhookConnectionError → stderr出力 → 終了コード2
    ├── その他例外 → stderr出力 → 終了コード99
