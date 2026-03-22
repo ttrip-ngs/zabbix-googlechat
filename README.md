@@ -37,11 +37,11 @@ sudo bash scripts/install.sh
 - Google Chat Card v2 形式のリッチカード通知
 - Webhook URL の優先順位管理（環境変数 > config.yaml > {ALERT.SENDTO}）
 - 自動リトライ（指数バックオフ）
-- Python 3.10 / 3.11 / 3.12 / 3.13 対応
+- Python 3.9 / 3.10 / 3.11 / 3.12 / 3.13 対応
 
 ## 動作要件
 
-- Python 3.10 以上
+- Python 3.9 以上
 - Zabbix 6.0 以上
 - Google Chat Webhook URL
 

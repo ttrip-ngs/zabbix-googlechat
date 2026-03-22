@@ -12,7 +12,7 @@ git checkout dev
 
 ### 1.2 Python環境の準備
 
-Python 3.10以上が必要。pyenvを使用した場合の例:
+Python 3.9以上が必要。pyenvを使用した場合の例:
 
 ```bash
 pyenv install 3.13.2
@@ -225,7 +225,7 @@ WIP
 
 `.github/workflows/ci.yml` で以下が自動実行される:
 
-- Python 3.10 / 3.11 / 3.12 / 3.13 でのテスト実行
+- Python 3.9 / 3.10 / 3.11 / 3.12 / 3.13 でのテスト実行
 - ruff Lint・フォーマットチェック
 - mypy 型チェック
 - bandit セキュリティチェック

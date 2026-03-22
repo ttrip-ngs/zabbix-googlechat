@@ -10,7 +10,7 @@ ZabbixのアラートイベントをGoogle Chatに通知する外部スクリプ
 
 | コンポーネント | バージョン |
 |---|---|
-| Python | 3.10 / 3.11 / 3.12 / 3.13 |
+| Python | 3.9 / 3.10 / 3.11 / 3.12 / 3.13 |
 | Zabbix | 6.0以上 |
 | Google Chat Webhook API | v1（Card v2形式） |
 

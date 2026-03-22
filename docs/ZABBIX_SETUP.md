@@ -3,7 +3,7 @@
 ## 1. 前提条件
 
 - Zabbix 6.0以上
-- Zabbixサーバーに Python 3.10以上がインストールされていること
+- Zabbixサーバーに Python 3.9以上がインストールされていること
 - Google Chat Webhook URLを取得済みであること（取得方法は [USAGE.md](USAGE.md) を参照）
 
 ---
