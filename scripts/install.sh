@@ -109,7 +109,7 @@ info "AlertScriptsPath を検出中..."
 
 ALERTSCRIPTS_PATH=""
 if [[ -f "${ZABBIX_SERVER_CONF}" ]]; then
-    detected=$(grep -E '^\s*AlertScriptsPath\s*=' "${ZABBIX_SERVER_CONF}" | tail -1 | sed 's/.*=\s*//' | tr -d ' ')
+    detected=$(grep -E '^\s*AlertScriptsPath\s*=' "${ZABBIX_SERVER_CONF}" 2>/dev/null | tail -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
     if [[ -n "$detected" ]]; then
         ALERTSCRIPTS_PATH="$detected"
         info "AlertScriptsPath を検出: ${ALERTSCRIPTS_PATH}"
