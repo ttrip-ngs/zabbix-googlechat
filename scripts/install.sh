@@ -8,7 +8,7 @@
 #   sudo bash install.sh --source git+https://github.com/user/zabbix-googlechat.git
 #
 # 動作:
-#   1. Python 3.10以上の確認
+#   1. Python 3.9以上の確認
 #   2. pip install 実行
 #   3. AlertScriptsPath を /etc/zabbix/zabbix_server.conf から自動検出
 #   4. zabbix_notify.py を alertscripts にコピー + 実行権限付与
@@ -69,7 +69,7 @@ for cmd in python3 python; do
         version=$("$cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
         major=$(echo "$version" | cut -d. -f1)
         minor=$(echo "$version" | cut -d. -f2)
-        if [[ "$major" -ge 3 && "$minor" -ge 10 ]]; then
+        if [[ "$major" -ge 3 && "$minor" -ge 9 ]]; then
             PYTHON_CMD="$cmd"
             info "Python ${version} を使用: $(command -v "$cmd")"
             break
@@ -78,7 +78,7 @@ for cmd in python3 python; do
 done
 
 if [[ -z "$PYTHON_CMD" ]]; then
-    error "Python 3.10 以上が見つかりません。インストールしてください。"
+    error "Python 3.9 以上が見つかりません。インストールしてください。"
     exit 1
 fi
 
