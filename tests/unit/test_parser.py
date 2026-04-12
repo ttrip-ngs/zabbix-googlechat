@@ -18,6 +18,7 @@ TRIGGER_NAME=CPU使用率が高い
 TRIGGER_DESCRIPTION=CPU使用率が90%を超えた
 TRIGGER_SEVERITY=High
 EVENT_ID=12345
+TRIGGER_ID=67890
 EVENT_DATE=2026.03.11
 EVENT_TIME=18:00:00
 ZABBIX_URL=https://zabbix.example.com
@@ -28,6 +29,7 @@ HOST_NAME=web01.example.com
 TRIGGER_NAME=CPU使用率が高い
 TRIGGER_SEVERITY=High
 EVENT_ID=12345
+TRIGGER_ID=67890
 EVENT_DATE=2026.03.11
 EVENT_TIME=18:00:00
 RECOVERY_DATE=2026.03.11
@@ -40,6 +42,7 @@ HOST_NAME=web01.example.com
 TRIGGER_NAME=CPU使用率が高い
 TRIGGER_SEVERITY=High
 EVENT_ID=12345
+TRIGGER_ID=67890
 EVENT_DATE=2026.03.11
 EVENT_TIME=18:00:00
 ACK_AUTHOR=admin
@@ -56,6 +59,7 @@ class TestZabbixParamParser:
         assert event.trigger_description == "CPU使用率が90%を超えた"
         assert event.trigger_severity == Severity.HIGH
         assert event.event_id == "12345"
+        assert event.trigger_id == "67890"
         assert event.event_date == "2026.03.11"
         assert event.event_time == "18:00:00"
         assert event.zabbix_url == "https://zabbix.example.com"
