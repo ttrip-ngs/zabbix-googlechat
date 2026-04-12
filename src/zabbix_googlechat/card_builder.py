@@ -216,7 +216,7 @@ class GoogleChatCardBuilder:
             # Zabbix 6.x以降のイベント詳細URL形式
             link_url = (
                 f"{self._event.zabbix_url.rstrip('/')}"
-                f"/tr_events.php?triggerid=&eventid={self._event.event_id}"
+                f"/tr_events.php?triggerid={self._event.trigger_id}&eventid={self._event.event_id}"
             )
         else:
             link_url = self._event.zabbix_url

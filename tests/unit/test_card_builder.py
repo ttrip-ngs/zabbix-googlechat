@@ -15,6 +15,7 @@ def problem_event() -> ZabbixEvent:
         trigger_description="CPU使用率が90%を超えた",
         trigger_severity=Severity.HIGH,
         event_id="12345",
+        trigger_id="67890",
         event_date="2026.03.11",
         event_time="18:00:00",
         zabbix_url="https://zabbix.example.com",
@@ -30,6 +31,7 @@ def recovery_event() -> ZabbixEvent:
         trigger_name="CPU使用率が高い",
         trigger_severity=Severity.HIGH,
         event_id="12345",
+        trigger_id="67890",
         event_date="2026.03.11",
         event_time="18:00:00",
         recovery_date="2026.03.11",
@@ -46,6 +48,7 @@ def update_event() -> ZabbixEvent:
         trigger_name="CPU使用率が高い",
         trigger_severity=Severity.HIGH,
         event_id="12345",
+        trigger_id="67890",
         event_date="2026.03.11",
         event_time="18:00:00",
         ack_author="admin",
@@ -139,6 +142,9 @@ class TestGoogleChatCardBuilder:
         buttons = action_sections[0]["widgets"][0]["buttonList"]["buttons"]
         assert len(buttons) > 0
         assert "Zabbixで確認する" in buttons[0]["text"]
+        button_url = buttons[0]["onClick"]["openLink"]["url"]
+        assert "triggerid=67890" in button_url
+        assert "eventid=12345" in button_url
 
     def test_action_section_without_url(self) -> None:
         event = ZabbixEvent(
