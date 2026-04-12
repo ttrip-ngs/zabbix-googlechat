@@ -63,6 +63,7 @@ class ZabbixEvent:
 
     # イベント情報
     event_id: str = ""
+    trigger_id: str = ""
     event_date: str = ""
     event_time: str = ""
 
