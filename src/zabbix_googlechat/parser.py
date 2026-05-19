@@ -29,6 +29,7 @@ _KEY_MAP: dict[str, str] = {
     "ACK_AUTHOR": "ack_author",
     "ITEM_LASTVALUE": "item_last_value",
     "ZABBIX_URL": "zabbix_url",
+    "CARD_STYLE": "card_style",
 }
 
 
@@ -136,6 +137,7 @@ class ZabbixParamParser:
             "ack_author",
             "item_last_value",
             "zabbix_url",
+            "card_style",
         ]:
             if field_name in parsed:
                 setattr(event, field_name, parsed[field_name])

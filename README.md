@@ -35,6 +35,7 @@ sudo bash scripts/install.sh
 - アラートタイプ別の絵文字表示 (PROBLEM: 🔴, RECOVERY: 🟢, UPDATE: 🔵)
 - 重要度別の絵文字表示 (Disaster: 🔥, High: 🔴, Warning: 🟡, etc.)
 - Google Chat Card v2 形式のリッチカード通知
+- 4種類のメッセージスタイル（detailed / medium / compact / text）をアクション単位で選択可能
 - Webhook URL の優先順位管理（環境変数 > config.yaml > {ALERT.SENDTO}）
 - 自動リトライ（指数バックオフ）
 - Python 3.9 / 3.10 / 3.11 / 3.12 / 3.13 対応

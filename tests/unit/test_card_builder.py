@@ -2,7 +2,13 @@
 
 import pytest
 
-from zabbix_googlechat.card_builder import GoogleChatCardBuilder
+from zabbix_googlechat.card_builder import (
+    CompactCardBuilder,
+    GoogleChatCardBuilder,
+    MediumCardBuilder,
+    PlainTextBuilder,
+    build_payload,
+)
 from zabbix_googlechat.models import AlertType, Severity, ZabbixEvent
 
 
@@ -170,3 +176,105 @@ class TestGoogleChatCardBuilder:
         builder = GoogleChatCardBuilder(event)
         payload = builder.build()
         assert "cardsV2" in payload
+
+
+class TestMediumCardBuilder:
+    def test_build_returns_cards_v2(self, problem_event: ZabbixEvent) -> None:
+        payload = MediumCardBuilder(problem_event).build()
+        assert "cardsV2" in payload
+
+    def test_sections_preserved(self, problem_event: ZabbixEvent) -> None:
+        """detailed と同じ2セクション構造を維持する."""
+        payload = MediumCardBuilder(problem_event).build()
+        sections = payload["cardsV2"][0]["card"]["sections"]
+        headers = [s.get("header", "") for s in sections]
+        assert "問題情報" in headers
+        assert "イベント情報" in headers
+
+    def test_no_top_label(self, problem_event: ZabbixEvent) -> None:
+        """各 decoratedText に topLabel を付けない（縦幅圧縮）."""
+        payload = MediumCardBuilder(problem_event).build()
+        sections = payload["cardsV2"][0]["card"]["sections"]
+        for section in sections:
+            for widget in section["widgets"]:
+                deco = widget.get("decoratedText")
+                if deco is not None:
+                    assert "topLabel" not in deco
+
+    def test_contains_values(self, problem_event: ZabbixEvent) -> None:
+        payload = MediumCardBuilder(problem_event).build()
+        text = str(payload)
+        assert "web01.example.com" in text
+        assert "High" in text
+
+
+class TestCompactCardBuilder:
+    def test_build_returns_cards_v2(self, problem_event: ZabbixEvent) -> None:
+        payload = CompactCardBuilder(problem_event).build()
+        assert "cardsV2" in payload
+
+    def test_uses_text_paragraph(self, problem_event: ZabbixEvent) -> None:
+        """本文は単一の textParagraph ウィジェットに集約される."""
+        payload = CompactCardBuilder(problem_event).build()
+        sections = payload["cardsV2"][0]["card"]["sections"]
+        body_section = sections[0]
+        assert "textParagraph" in body_section["widgets"][0]
+        # 改行は <br>（Google Chat の textParagraph 仕様）
+        assert "<br>" in body_section["widgets"][0]["textParagraph"]["text"]
+
+    def test_has_action_button(self, problem_event: ZabbixEvent) -> None:
+        payload = CompactCardBuilder(problem_event).build()
+        text = str(payload)
+        assert "Zabbixで確認する" in text
+
+    def test_recovery_shows_recovery_time(self, recovery_event: ZabbixEvent) -> None:
+        payload = CompactCardBuilder(recovery_event).build()
+        assert "18:30:00" in str(payload)
+
+
+class TestPlainTextBuilder:
+    def test_no_cards_v2(self, problem_event: ZabbixEvent) -> None:
+        """text スタイルは cardsV2 を持たない."""
+        payload = PlainTextBuilder(problem_event).build()
+        assert "cardsV2" not in payload
+        assert "text" in payload
+
+    def test_contains_key_info(self, problem_event: ZabbixEvent) -> None:
+        payload = PlainTextBuilder(problem_event).build()
+        text = payload["text"]
+        assert "PROBLEM" in text
+        assert "web01.example.com" in text
+        assert "High" in text
+        assert "https://zabbix.example.com" in text
+
+    def test_recovery_shows_recovery_time(self, recovery_event: ZabbixEvent) -> None:
+        payload = PlainTextBuilder(recovery_event).build()
+        assert "18:30:00" in payload["text"]
+
+
+class TestBuildPayloadFactory:
+    def test_detailed(self, problem_event: ZabbixEvent) -> None:
+        payload = build_payload(problem_event, "detailed")
+        sections = payload["cardsV2"][0]["card"]["sections"]
+        # detailed は topLabel 付き decoratedText を使う
+        assert any("topLabel" in w.get("decoratedText", {}) for s in sections for w in s["widgets"])
+
+    def test_medium(self, problem_event: ZabbixEvent) -> None:
+        payload = build_payload(problem_event, "medium")
+        assert "cardsV2" in payload
+
+    def test_compact(self, problem_event: ZabbixEvent) -> None:
+        payload = build_payload(problem_event, "compact")
+        sections = payload["cardsV2"][0]["card"]["sections"]
+        assert "textParagraph" in sections[0]["widgets"][0]
+
+    def test_text(self, problem_event: ZabbixEvent) -> None:
+        payload = build_payload(problem_event, "text")
+        assert "cardsV2" not in payload
+        assert "text" in payload
+
+    def test_unknown_style_falls_back_to_detailed(self, problem_event: ZabbixEvent) -> None:
+        """未知スタイルは detailed にフォールバックする（通知は失わない）."""
+        payload = build_payload(problem_event, "bogus")
+        detailed = build_payload(problem_event, "detailed")
+        assert payload == detailed

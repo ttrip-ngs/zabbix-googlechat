@@ -18,6 +18,12 @@
   - `tests/unit/test_cli.py` 新規作成（17件追加、計80件）
   - `docs/QUICKSTART.md` 新規作成（運用者向け導入手順）
   - README.md、docs/USAGE.md、docs/ZABBIX_SETUP.md、docs/SPEC.md 更新
+- [x] メッセージスタイル複数化（2026-05-14）
+  - `CardStyle` enum（detailed / medium / compact / text）を追加
+  - `card_builder.py` に `MediumCardBuilder` / `CompactCardBuilder` / `PlainTextBuilder` と `build_payload` ファクトリを追加
+  - `config.yaml` の `card_style` / 環境変数 `GCHAT_CARD_STYLE` / メッセージ本文 `CARD_STYLE` で選択可能
+  - 不正値は警告ログを出して `detailed` にフォールバック（通知は失わない）
+  - ユニットテスト24件追加（計104件）、ドキュメント・設定サンプル更新
 
 ## 未着手
 

@@ -85,6 +85,7 @@ googlechat:
   timeout: 10
   max_retries: 3
   retry_delay: 1.0
+  card_style: detailed   # detailed / medium / compact / text
 
 zabbix:
   url: "https://zabbix.example.com"
@@ -97,6 +98,29 @@ logging:
 ### 3.3 方法3: {ALERT.SENDTO}
 
 Zabbixのメディアタイプ設定で、ユーザーメディアの「送信先」フィールドにWebhook URLを直接設定する。この方法は他の設定がない場合のフォールバックとして機能する。
+
+---
+
+## 3.5 メッセージスタイルの選択
+
+Google Chat に送信するメッセージは4種類のスタイルから選べる。スペースの占有が大きい場合は
+`compact` や `text` を使うと一覧性が向上する。
+
+| スタイル | 説明 |
+|---|---|
+| `detailed`（既定） | 2セクション・各項目を2行表示。情報量重視 |
+| `medium` | 2セクション構造を維持しつつ各項目を1行に圧縮 |
+| `compact` | ヘッダー + 本文1枚 + ボタンに集約 |
+| `text` | カードを使わないプレーンテキスト。最小スペース |
+
+選択方法（優先順位は上が高い）:
+
+1. Zabbixアクションのメッセージ本文に `CARD_STYLE=compact` を記載（アクション単位で上書き）
+2. 環境変数 `GCHAT_CARD_STYLE`
+3. `config.yaml` の `googlechat.card_style`
+
+未指定の場合は `detailed`。不正な値は警告ログを出して `detailed` にフォールバックする。
+詳細は [CONFIGURATION.md](CONFIGURATION.md) を参照。
 
 ---
 
@@ -216,6 +240,31 @@ ACK_MESSAGE=調査中です
 ZABBIX_URL=https://zabbix.example.com"
 
 echo "終了コード: $?"
+```
+
+**スタイルを指定したテスト:**
+
+環境変数 `GCHAT_CARD_STYLE` で既定スタイルを切り替える:
+
+```bash
+GCHAT_CARD_STYLE=compact python3 scripts/zabbix_notify.py "" "テスト" "ALERT_TYPE=PROBLEM
+HOST_NAME=web01.example.com
+TRIGGER_NAME=CPU使用率が高い
+TRIGGER_SEVERITY=High
+EVENT_ID=12345
+ZABBIX_URL=https://zabbix.example.com"
+```
+
+メッセージ本文に `CARD_STYLE=text` を加えるとアクション単位で上書きできる:
+
+```bash
+python3 scripts/zabbix_notify.py "" "テスト" "ALERT_TYPE=PROBLEM
+HOST_NAME=web01.example.com
+TRIGGER_NAME=CPU使用率が高い
+TRIGGER_SEVERITY=High
+EVENT_ID=12345
+ZABBIX_URL=https://zabbix.example.com
+CARD_STYLE=text"
 ```
 
 ### 5.2 終了コードの確認

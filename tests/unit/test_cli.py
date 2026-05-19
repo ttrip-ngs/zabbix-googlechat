@@ -284,20 +284,18 @@ class TestMain:
         monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
         monkeypatch.setattr("sys.argv", ["prog"] + self._VALID_ARGV)
 
-        captured_events = []
+        captured_calls: list[tuple[object, str]] = []
 
-        def capture_builder(event: object) -> MagicMock:
-            captured_events.append(event)
-            mock = MagicMock()
-            mock.build.return_value = {"cardsV2": [{"cardId": "test"}]}
-            return mock
+        def capture_build_payload(event: object, style: str) -> dict:
+            captured_calls.append((event, style))
+            return {"cardsV2": [{"cardId": "test"}]}
 
         mock_response = MagicMock()
         mock_response.retry_count = 0
         mock_response.elapsed_ms = 50.0
 
         with (
-            patch("zabbix_googlechat.cli.GoogleChatCardBuilder", side_effect=capture_builder),
+            patch("zabbix_googlechat.cli.build_payload", side_effect=capture_build_payload),
             patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_sender_cls,
         ):
             mock_sender = MagicMock()
@@ -309,7 +307,111 @@ class TestMain:
             result = main()
 
         assert result == EXIT_SUCCESS
-        assert len(captured_events) == 1
-        event = captured_events[0]
+        assert len(captured_calls) == 1
+        event, _style = captured_calls[0]
         # config.yaml の zabbix_url が補完されていること
         assert event.zabbix_url == "https://zabbix.example.com"
+
+    def test_card_style_action_overrides_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """メッセージ本文の CARD_STYLE が設定ファイルの card_style より優先される."""
+        data = {
+            "googlechat": {
+                "webhook_url": "https://chat.googleapis.com/valid",
+                "card_style": "detailed",
+            },
+            "zabbix": {"url": "https://zabbix.example.com"},
+        }
+        yaml_path = tmp_path / "config.yaml"
+        yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "prog",
+                "",
+                "テスト通知",
+                "ALERT_TYPE=PROBLEM\nHOST_NAME=test-server\nTRIGGER_NAME=テスト\n"
+                "TRIGGER_SEVERITY=High\nEVENT_ID=1\nCARD_STYLE=compact",
+            ],
+        )
+
+        captured_calls: list[tuple[object, str]] = []
+
+        def capture_build_payload(event: object, style: str) -> dict:
+            captured_calls.append((event, style))
+            return {"cardsV2": [{"cardId": "test"}]}
+
+        mock_response = MagicMock()
+        mock_response.retry_count = 0
+        mock_response.elapsed_ms = 50.0
+
+        with (
+            patch("zabbix_googlechat.cli.build_payload", side_effect=capture_build_payload),
+            patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_sender_cls,
+        ):
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender.send.return_value = mock_response
+            mock_sender_cls.return_value = mock_sender
+
+            result = main()
+
+        assert result == EXIT_SUCCESS
+        assert len(captured_calls) == 1
+        _event, style = captured_calls[0]
+        assert style == "compact"
+
+    def test_invalid_action_card_style_falls_back_to_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """メッセージ本文の CARD_STYLE が不正な場合、設定ファイルの値にフォールバックする."""
+        data = {
+            "googlechat": {
+                "webhook_url": "https://chat.googleapis.com/valid",
+                "card_style": "medium",
+            },
+            "zabbix": {"url": "https://zabbix.example.com"},
+        }
+        yaml_path = tmp_path / "config.yaml"
+        yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "prog",
+                "",
+                "テスト通知",
+                "ALERT_TYPE=PROBLEM\nHOST_NAME=test-server\nTRIGGER_NAME=テスト\n"
+                "TRIGGER_SEVERITY=High\nEVENT_ID=1\nCARD_STYLE=Bogus",
+            ],
+        )
+
+        captured_calls: list[tuple[object, str]] = []
+
+        def capture_build_payload(event: object, style: str) -> dict:
+            captured_calls.append((event, style))
+            return {"cardsV2": [{"cardId": "test"}]}
+
+        mock_response = MagicMock()
+        mock_response.retry_count = 0
+        mock_response.elapsed_ms = 50.0
+
+        with (
+            patch("zabbix_googlechat.cli.build_payload", side_effect=capture_build_payload),
+            patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_sender_cls,
+        ):
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender.send.return_value = mock_response
+            mock_sender_cls.return_value = mock_sender
+
+            result = main()
+
+        assert result == EXIT_SUCCESS
+        assert len(captured_calls) == 1
+        _event, style = captured_calls[0]
+        assert style == "medium"

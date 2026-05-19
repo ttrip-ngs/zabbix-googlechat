@@ -14,6 +14,25 @@ class AlertType(str, Enum):
     UPDATE = "UPDATE"
 
 
+class CardStyle(str, Enum):
+    """Google Chat メッセージスタイル.
+
+    detailed: 2セクション + 各項目 decoratedText(topLabel+text)（情報量重視・既定）
+    medium:   2セクション維持・各項目を topLabel 無し1行に圧縮
+    compact:  ヘッダー + textParagraph 1枚 + ボタン（カード1枚に集約）
+    text:     cardsV2 を使わないプレーンテキスト（最小スペース）
+    """
+
+    DETAILED = "detailed"
+    MEDIUM = "medium"
+    COMPACT = "compact"
+    TEXT = "text"
+
+
+# デフォルトのメッセージスタイル
+DEFAULT_CARD_STYLE = CardStyle.DETAILED.value
+
+
 class Severity(str, Enum):
     """Zabbix トリガー重要度."""
 
@@ -83,6 +102,9 @@ class ZabbixEvent:
 
     # Webhook送信先（{ALERT.SENDTO}から取得）
     webhook_url: str = ""
+
+    # メッセージスタイル（アクション単位の上書き値。空=未指定で設定ファイルの値を使用）
+    card_style: str = ""
 
     # アラートメッセージ全文（デバッグ用）
     raw_message: str = ""

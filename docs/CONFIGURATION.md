@@ -31,6 +31,7 @@
 | `ZABBIX_URL` | ZabbixサーバーのベースURL | "" | `https://zabbix.example.com` |
 | `GCHAT_TIMEOUT` | HTTPリクエストタイムアウト（秒） | 10 | `30` |
 | `GCHAT_MAX_RETRIES` | 送信失敗時の最大リトライ回数 | 3 | `5` |
+| `GCHAT_CARD_STYLE` | メッセージスタイル（detailed / medium / compact / text） | detailed | `compact` |
 | `LOG_LEVEL` | ログ出力レベル | INFO | `DEBUG` |
 | `LOG_FILE` | ログファイルの出力先パス | "" | `/var/log/zabbix-googlechat/notify.log` |
 
@@ -79,6 +80,10 @@ googlechat:
   # 実際の待機時間: retry_delay × 2^(リトライ回数-1)
   # 例: retry_delay=1.0 → 1秒, 2秒, 4秒...
   retry_delay: 1.0
+
+  # メッセージスタイル: detailed / medium / compact / text
+  # 環境変数 GCHAT_CARD_STYLE で上書き可能
+  card_style: detailed
 
 zabbix:
   # ZabbixサーバーのベースURL
@@ -131,6 +136,32 @@ Webhook APIへのHTTPリクエストのタイムアウト秒数。
   - 1回目: 1.0秒
   - 2回目: 2.0秒
   - 3回目: 4.0秒
+
+#### googlechat.card_style
+
+Google Chat に送信するメッセージの表示スタイル。
+
+| 値 | 構造 | 用途 |
+|---|---|---|
+| `detailed` | 2セクション・各項目を topLabel + text の2行で表示（既定） | 情報量重視 |
+| `medium` | 2セクション構造は維持・各項目を `絵文字 ラベル: 値` の1行に圧縮 | 構造を残しつつ省スペース |
+| `compact` | ヘッダー + 本文(textParagraph)1枚 + ボタンに集約 | カード1枚に集約 |
+| `text` | カード(cardsV2)を使わないプレーンテキスト | 最小スペース |
+
+- デフォルト: `detailed`（既存インストールは設定変更不要で従来表示のまま）
+- 環境変数 `GCHAT_CARD_STYLE` で上書き可能
+- Zabbixアクションのメッセージ本文に `CARD_STYLE=xxx` を記載するとアクション単位で上書きできる
+  （未記載なら設定ファイル / 環境変数の値を使用）
+- 不正な値を指定した場合は警告ログを出力してフォールバックする（通知は失われない）。
+  メッセージ本文の `CARD_STYLE` が不正なら設定ファイル / 環境変数の値へ、設定ファイル /
+  環境変数の値が不正なら `detailed` へフォールバックする
+- 優先順位は次の通り:
+
+```
+優先度1 (最高): メッセージ本文の CARD_STYLE
+優先度2:        環境変数 GCHAT_CARD_STYLE
+優先度3 (最低): config.yaml の googlechat.card_style
+```
 
 #### zabbix.url
 
@@ -232,3 +263,23 @@ ITEM_LASTVALUE={ITEM.LASTVALUE}
 | `ACK_MESSAGE` | {ACK.MESSAGE} | 確認コメント（UPDATEのみ） |
 | `ZABBIX_URL` | {$ZABBIX.URL} | ZabbixサーバーURL（グローバルマクロ） |
 | `ITEM_LASTVALUE` | {ITEM.LASTVALUE} | 監視アイテムの最新値 |
+| `CARD_STYLE` | 固定値 | メッセージスタイルのアクション単位上書き（detailed / medium / compact / text）。省略可 |
+
+### 4.5 アクション単位でスタイルを切り替える
+
+メッセージ本文に `CARD_STYLE` を追加すると、そのアクションだけ別スタイルで通知できる。
+同一Zabbixサーバー内で、重大アラートは `detailed`、復旧通知は `compact` といった使い分けが可能。
+
+```
+ALERT_TYPE=RECOVERY
+HOST_NAME={HOST.NAME}
+TRIGGER_NAME={TRIGGER.NAME}
+TRIGGER_SEVERITY={TRIGGER.SEVERITY}
+EVENT_ID={EVENT.ID}
+EVENT_DATE={EVENT.DATE}
+EVENT_TIME={EVENT.TIME}
+RECOVERY_DATE={EVENT.RECOVERY.DATE}
+RECOVERY_TIME={EVENT.RECOVERY.TIME}
+ZABBIX_URL={$ZABBIX.URL}
+CARD_STYLE=compact
+```

@@ -13,6 +13,7 @@ import yaml
 from dotenv import load_dotenv
 
 from zabbix_googlechat.exceptions import ConfigurationError
+from zabbix_googlechat.models import DEFAULT_CARD_STYLE, CardStyle
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ _ENV_TIMEOUT = "GCHAT_TIMEOUT"
 _ENV_MAX_RETRIES = "GCHAT_MAX_RETRIES"
 _ENV_LOG_LEVEL = "LOG_LEVEL"
 _ENV_LOG_FILE = "LOG_FILE"
+_ENV_CARD_STYLE = "GCHAT_CARD_STYLE"
 
 # デフォルト値
 _DEFAULT_TIMEOUT = 10
@@ -46,6 +48,8 @@ class NotificationConfig:
     timeout: int = _DEFAULT_TIMEOUT
     max_retries: int = _DEFAULT_MAX_RETRIES
     retry_delay: float = _DEFAULT_RETRY_DELAY
+    # メッセージスタイル（detailed / medium / compact / text）
+    card_style: str = DEFAULT_CARD_STYLE
 
     # Zabbix設定
     zabbix_url: str = ""
@@ -77,6 +81,7 @@ class NotificationConfig:
         config.zabbix_url = os.environ.get(_ENV_ZABBIX_URL, "")
         config.log_level = os.environ.get(_ENV_LOG_LEVEL, _DEFAULT_LOG_LEVEL)
         config.log_file = os.environ.get(_ENV_LOG_FILE, "")
+        config.card_style = os.environ.get(_ENV_CARD_STYLE, DEFAULT_CARD_STYLE)
 
         timeout_str = os.environ.get(_ENV_TIMEOUT, "")
         if timeout_str:
@@ -135,6 +140,7 @@ class NotificationConfig:
         config.timeout = int(googlechat.get("timeout", _DEFAULT_TIMEOUT))
         config.max_retries = int(googlechat.get("max_retries", _DEFAULT_MAX_RETRIES))
         config.retry_delay = float(googlechat.get("retry_delay", _DEFAULT_RETRY_DELAY))
+        config.card_style = str(googlechat.get("card_style", DEFAULT_CARD_STYLE))
         config.zabbix_url = str(zabbix.get("url", ""))
         config.log_level = str(logging_cfg.get("level", _DEFAULT_LOG_LEVEL))
         config.log_file = str(logging_cfg.get("file", ""))
@@ -179,6 +185,7 @@ class NotificationConfig:
             config.timeout = yaml_config.timeout
             config.max_retries = yaml_config.max_retries
             config.retry_delay = yaml_config.retry_delay
+            config.card_style = yaml_config.card_style
             config.log_level = yaml_config.log_level
             config.log_file = yaml_config.log_file
 
@@ -203,6 +210,10 @@ class NotificationConfig:
         env_log_file = os.environ.get(_ENV_LOG_FILE, "")
         if env_log_file:
             config.log_file = env_log_file
+
+        env_card_style = os.environ.get(_ENV_CARD_STYLE, "")
+        if env_card_style:
+            config.card_style = env_card_style
 
         env_timeout = os.environ.get(_ENV_TIMEOUT, "")
         if env_timeout:
@@ -250,3 +261,14 @@ class NotificationConfig:
                 f"無効なログレベル: '{self.log_level}'\n"
                 f"有効な値: {', '.join(sorted(valid_log_levels))}"
             )
+
+        # メッセージスタイルは不正値でも通知到達を優先し、警告のうえ既定へフォールバック
+        valid_card_styles = {style.value for style in CardStyle}
+        if self.card_style not in valid_card_styles:
+            logger.warning(
+                "無効なメッセージスタイル '%s'、'%s' にフォールバックします（有効な値: %s）",
+                self.card_style,
+                DEFAULT_CARD_STYLE,
+                ", ".join(sorted(valid_card_styles)),
+            )
+            self.card_style = DEFAULT_CARD_STYLE

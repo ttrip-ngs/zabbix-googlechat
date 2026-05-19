@@ -208,6 +208,22 @@ ZABBIX_URL={$ZABBIX.URL}
 ITEM_LASTVALUE={ITEM.LASTVALUE}
 ```
 
+### 4.5 メッセージスタイルの指定（任意）
+
+メッセージ本文に `CARD_STYLE` 行を追加すると、そのアクションだけ別スタイルで通知できる。
+値は `detailed` / `medium` / `compact` / `text` のいずれか。省略時は設定ファイル
+（`config.yaml` の `card_style` / 環境変数 `GCHAT_CARD_STYLE`、既定 `detailed`）の値が使われる。
+
+例: 復旧通知だけコンパクト表示にする場合、RECOVERYのメッセージ本文に以下を追加する。
+
+```
+CARD_STYLE=compact
+```
+
+同一Zabbixサーバー内でも、重大アラートは `detailed`、復旧通知は `compact` のように
+アクション単位で使い分けられる。不正な値を指定した場合は警告ログを出力し `detailed` に
+フォールバックするため、通知自体は失われない。
+
 ---
 
 ## 5. ユーザーメディアの設定
