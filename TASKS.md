@@ -25,8 +25,14 @@
   - 不正値は警告ログを出して `detailed` にフォールバック（通知は失わない）
   - ユニットテスト24件追加（計104件）、ドキュメント・設定サンプル更新
 
+- [x] GitHub リモートリポジトリ作成・初回プッシュ（ttrip-ngs/zabbix-googlechat、PR #1〜で運用中）
+- [x] メッセージスタイル機能のリリース（2026-06-10）
+  - プッシュ・PR前ローカル品質チェック全通過（ruff check / ruff format --check / mypy src / pytest 105件）
+  - PR #8（feature/googlechat-message-styles-20260514 → dev）作成・CI成功・マージ、feature ブランチ削除
+  - PR #9（dev → main）作成・CI成功・マージ（origin/main = 612b30c）
+- [x] GitHub Actions CI 動作確認（PR #8 / #9 で全ジョブ success）
+- [x] 複数 Python バージョン（3.9/3.10/3.11/3.12/3.13）でのテスト実行確認（CIマトリクスで全通過）
+
 ## 未着手
 
-- [ ] GitHub リモートリポジトリ作成・初回プッシュ
-- [ ] GitHub Actions CI 動作確認
-- [ ] 複数 Python バージョン（3.10/3.11/3.12/3.13）でのテスト実行確認
+（なし）
