@@ -129,8 +129,14 @@ Zabbixアラートイベントの全情報を保持するデータクラス。
 | `item_last_value` | str | アイテム最新値 | {ITEM.LASTVALUE} |
 | `zabbix_url` | str | Zabbix URL | {$ZABBIX.URL} |
 | `webhook_url` | str | Webhook URL | {ALERT.SENDTO} |
+| `card_style` | str | メッセージスタイルのアクション単位上書き値（空=未指定） | CARD_STYLE キー |
 | `raw_message` | str | 元メッセージ（デバッグ用） | - |
 | `extra` | dict[str, str] | 未知キーの格納先 | - |
+
+#### CardStyle (Enum)
+
+Google Chat メッセージの表示スタイル。`detailed` / `medium` / `compact` / `text` の4値。
+既定は `detailed`。未知の値は `detailed` にフォールバックする。
 
 プロパティ:
 - `event_datetime`: `event_date` と `event_time` を結合した文字列
@@ -235,7 +241,25 @@ argv[2]: {ALERT.MESSAGE} - メッセージ本文（KEY=VALUE形式）
 
 ### 3.4 card_builder.py
 
-#### GoogleChatCardBuilder
+ZabbixEventからGoogle Chatへの送信ペイロードを構築する。スタイルごとに専用ビルダーを持ち、
+外部からは `build_payload(event, style)` ファクトリ関数を経由して呼び出す。
+
+#### build_payload(event, style)
+
+`style` に応じたビルダーを選択しペイロード辞書を返す。未知の `style` は警告ログを出力して
+`detailed` にフォールバックする（スタイル指定ミスで通知自体が失われるのを防ぐ）。
+
+| style | ビルダークラス | 構造 |
+|---|---|---|
+| `detailed` | `GoogleChatCardBuilder` | 2セクション・各項目 decoratedText(topLabel+text) |
+| `medium` | `MediumCardBuilder` | 2セクション維持・各項目を topLabel 無し1行に圧縮 |
+| `compact` | `CompactCardBuilder` | ヘッダー + textParagraph 1枚 + ボタン |
+| `text` | `PlainTextBuilder` | cardsV2 を使わない `{"text": ...}` のみ |
+
+共通処理（ヘッダー構築・Zabbixリンク生成・アクションボタン・絵文字解決）は基底クラス
+`_CardBuilderBase` に集約している。
+
+#### GoogleChatCardBuilder（detailed スタイル）
 
 ZabbixEventからGoogle Chat Card v2形式のJSONペイロードを構築する。
 
@@ -420,9 +444,14 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 
 ---
 
-## 5. Google Chat Card v2 ペイロード形式
+## 5. Google Chat 送信ペイロード形式
 
-### 5.1 送信ペイロードの構造
+メッセージスタイル（`card_style`）により4種類のペイロード形式を出力する。
+スタイルの選択方法と優先順位は §6 を参照。
+
+### 5.1 detailed スタイル（既定）
+
+`cardsV2` で2セクション、各項目を `decoratedText`（topLabel + text）で描画する。
 
 ```json
 {
@@ -455,7 +484,45 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 }
 ```
 
-### 5.2 Webhook URL形式
+### 5.2 medium スタイル
+
+`detailed` と同じ2セクション構造だが、各 `decoratedText` に `topLabel` を付けず
+`text` のみで `絵文字 <b>ラベル:</b> 値` を1行表示し、縦幅を圧縮する。
+
+### 5.3 compact スタイル
+
+ヘッダー + 本文セクション（`textParagraph` 1個）+ アクションボタンに集約する。
+`textParagraph` は改行に `<br>`、装飾に `<b>` を用いる（Google Chat の制限に準拠）。
+
+```json
+{
+  "cardsV2": [
+    {
+      "cardId": "zabbix-alert-{event_id}",
+      "card": {
+        "header": { "title": "...", "subtitle": "..." },
+        "sections": [
+          { "widgets": [ { "textParagraph": { "text": "🔴 High ・ 📊 95%<br>🕐 ..." } } ] },
+          { "widgets": [ { "buttonList": { "buttons": [ ... ] } } ] }
+        ]
+      }
+    }
+  ]
+}
+```
+
+### 5.4 text スタイル
+
+`cardsV2` を使わないプレーンテキスト。改行(`\n`)と `*bold*` 記法で整形し、
+Zabbixリンクは本文末尾にURLを記載する。
+
+```json
+{
+  "text": "🟢 [RECOVERY] web01.example.com\n*CPU使用率が高い*\n🟡 Warning ・ 📊 -74 dBm\n..."
+}
+```
+
+### 5.5 Webhook URL形式
 
 ```
 https://chat.googleapis.com/v1/spaces/{SPACE_ID}/messages?key={KEY}&token={TOKEN}
@@ -470,9 +537,10 @@ https://chat.googleapis.com/v1/spaces/{SPACE_ID}/messages?key={KEY}&token={TOKEN
 ```yaml
 googlechat:
   webhook_url: "https://chat.googleapis.com/v1/spaces/..."
-  timeout: 10          # HTTPタイムアウト（秒）
-  max_retries: 3       # 最大リトライ回数
-  retry_delay: 1.0     # リトライ間隔基準値（秒）
+  timeout: 10              # HTTPタイムアウト（秒）
+  max_retries: 3           # 最大リトライ回数
+  retry_delay: 1.0         # リトライ間隔基準値（秒）
+  card_style: detailed     # detailed / medium / compact / text
 
 zabbix:
   url: "https://zabbix.example.com"
@@ -490,8 +558,12 @@ logging:
 | `ZABBIX_URL` | zabbix_url | "" | 任意 |
 | `GCHAT_TIMEOUT` | timeout | 10 | 任意 |
 | `GCHAT_MAX_RETRIES` | max_retries | 3 | 任意 |
+| `GCHAT_CARD_STYLE` | card_style | detailed | 任意 |
 | `LOG_LEVEL` | log_level | INFO | 任意 |
 | `LOG_FILE` | log_file | "" | 任意 |
+
+メッセージスタイルの優先順位（高→低）: メッセージ本文 `CARD_STYLE` キー > 環境変数
+`GCHAT_CARD_STYLE` > `config.yaml` の `googlechat.card_style` > 既定値 `detailed`。
 
 ---
 

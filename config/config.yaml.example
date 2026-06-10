@@ -8,6 +8,14 @@ googlechat:
   max_retries: 3
   # リトライ間隔（秒）- 指数バックオフの基準値
   retry_delay: 1.0
+  # メッセージスタイル: detailed / medium / compact / text
+  #   detailed: 2セクション・項目ごと2行表示（情報量重視・既定）
+  #   medium  : 2セクション維持・項目を1行に圧縮
+  #   compact : カード1枚に集約（ヘッダー + 本文 + ボタン）
+  #   text    : カードを使わないプレーンテキスト（最小スペース）
+  # 環境変数 GCHAT_CARD_STYLE で上書き可能。
+  # Zabbixアクションのメッセージ本文に CARD_STYLE=compact を書くとアクション単位で上書き可能。
+  card_style: detailed
 
 zabbix:
   # ZabbixサーバーのベースURL
