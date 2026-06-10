@@ -126,3 +126,44 @@ class TestNotificationConfig:
         monkeypatch.setenv("GCHAT_TIMEOUT", "not_a_number")
         config = NotificationConfig.from_env()
         assert config.timeout == 10  # デフォルト値
+
+    # ---- card_style のテスト ----
+
+    def test_card_style_default(self) -> None:
+        """card_style の既定値は detailed."""
+        config = NotificationConfig()
+        assert config.card_style == "detailed"
+
+    def test_card_style_from_yaml(self, tmp_path: Path) -> None:
+        """YAML から card_style を読み込む."""
+        data = {"googlechat": {"webhook_url": "https://x", "card_style": "compact"}}
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(yaml.dump(data), encoding="utf-8")
+        config = NotificationConfig.from_yaml(yaml_file)
+        assert config.card_style == "compact"
+
+    def test_card_style_env_over_yaml(
+        self, sample_yaml: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """環境変数 GCHAT_CARD_STYLE は YAML より優先される."""
+        monkeypatch.setenv("GCHAT_CARD_STYLE", "text")
+        config = NotificationConfig.load(yaml_path=sample_yaml)
+        assert config.card_style == "text"
+
+    def test_validate_invalid_card_style_falls_back(self) -> None:
+        """不正な card_style は例外を投げず detailed にフォールバックする."""
+        config = NotificationConfig(
+            webhook_url="https://valid.example.com",
+            card_style="bogus",
+        )
+        config.validate()  # 例外が発生しないこと
+        assert config.card_style == "detailed"
+
+    def test_validate_valid_card_style_preserved(self) -> None:
+        """有効な card_style は validate で保持される."""
+        config = NotificationConfig(
+            webhook_url="https://valid.example.com",
+            card_style="medium",
+        )
+        config.validate()
+        assert config.card_style == "medium"

@@ -141,3 +141,14 @@ class TestZabbixParamParser:
         event = parser.parse_message_body(message)
         assert event.host_name == "web01"
         assert event.trigger_name == "test"
+
+    def test_parse_card_style(self, parser: ZabbixParamParser) -> None:
+        """CARD_STYLE キーが card_style フィールドにパースされる."""
+        message = "HOST_NAME=web01\nCARD_STYLE=compact"
+        event = parser.parse_message_body(message)
+        assert event.card_style == "compact"
+
+    def test_parse_card_style_absent(self, parser: ZabbixParamParser) -> None:
+        """CARD_STYLE 未指定の場合 card_style は空文字のまま."""
+        event = parser.parse_message_body(SAMPLE_PROBLEM_MESSAGE)
+        assert event.card_style == ""

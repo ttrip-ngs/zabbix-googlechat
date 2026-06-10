@@ -27,7 +27,7 @@ import os
 import sys
 from pathlib import Path
 
-from zabbix_googlechat.card_builder import GoogleChatCardBuilder
+from zabbix_googlechat.card_builder import build_payload
 from zabbix_googlechat.config import NotificationConfig
 from zabbix_googlechat.exceptions import (
     ConfigurationError,
@@ -35,6 +35,7 @@ from zabbix_googlechat.exceptions import (
     WebhookConnectionError,
     WebhookPayloadError,
 )
+from zabbix_googlechat.models import CardStyle
 from zabbix_googlechat.parser import ZabbixParamParser
 from zabbix_googlechat.webhook_sender import GoogleChatWebhookSender
 
@@ -172,12 +173,22 @@ def main() -> int:
     logger = logging.getLogger(__name__)
 
     # 3. カードビルド
-    builder = GoogleChatCardBuilder(event)
-    payload = builder.build()
-    logger.debug(
-        "カードビルド完了: card_id=%s",
-        payload.get("cardsV2", [{}])[0].get("cardId", ""),
-    )
+    # スタイル優先順位: アクション本文の CARD_STYLE > 設定ファイル/環境変数 > 既定(detailed)
+    # アクション本文の値が不正な場合は、設定ファイルで検証済みの値へフォールバックする
+    # （タイプミスで意図せず detailed に落ちるのを防ぐ）。
+    known_styles = {style.value for style in CardStyle}
+    if event.card_style and event.card_style in known_styles:
+        effective_style = event.card_style
+    else:
+        if event.card_style:
+            logger.warning(
+                "メッセージ本文の CARD_STYLE '%s' が不正です。設定ファイルの '%s' を使用します",
+                event.card_style,
+                config.card_style,
+            )
+        effective_style = config.card_style
+    payload = build_payload(event, effective_style)
+    logger.debug("カードビルド完了: style=%s", effective_style)
 
     # 4. Webhook送信
     try:
