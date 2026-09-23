@@ -19,7 +19,7 @@ ZabbixのアラートイベントをGoogle Chatに通知する外部スクリプ
 - アラートタイプ別通知（PROBLEM / RECOVERY / UPDATE）
 - 重要度別絵文字表示
 - Google Chat Card v2形式リッチカード通知
-- Webhook URL優先順位管理（環境変数 > config.yaml > {ALERT.SENDTO}）
+- Webhook URL優先順位管理（{ALERT.SENDTO}(URLの場合) > 環境変数 > config.yaml）
 - 指数バックオフによる自動リトライ
 - ログファイル出力対応
 
@@ -217,9 +217,9 @@ argv[2]: {ALERT.MESSAGE} - メッセージ本文（KEY=VALUE形式）
 **設定優先順位（高→低）**
 
 ```
-1. 環境変数 (GCHAT_WEBHOOK_URL 等)
-2. config/config.yaml
-3. {ALERT.SENDTO} 引数
+1. {ALERT.SENDTO} 引数(webhook_url のみ。https:// で始まる場合)
+2. 環境変数 (GCHAT_WEBHOOK_URL 等)
+3. config/config.yaml
 ```
 
 **クラスメソッド**

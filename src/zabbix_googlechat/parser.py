@@ -73,7 +73,7 @@ class ZabbixParamParser:
         event = self.parse_message_body(message_body)
         event.raw_message = message_body
 
-        # webhook_urlが空でない場合のみ上書き（config優先のため、空文字は無視）
+        # webhook_urlが空でない場合のみ設定（URLかどうかの判定と優先順位は NotificationConfig.load）
         if webhook_url:
             event.webhook_url = webhook_url
 

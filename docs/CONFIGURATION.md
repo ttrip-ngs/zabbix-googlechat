@@ -7,10 +7,15 @@
 ```
 優先度1 (最高): 環境変数
 優先度2:        config/config.yaml
-優先度3 (最低): {ALERT.SENDTO} 引数
 ```
 
 例: 環境変数 `GCHAT_WEBHOOK_URL` が設定されていれば、`config.yaml` の `webhook_url` は無視される。
+
+**Webhook URL だけは `{ALERT.SENDTO}` 引数が最優先になる**(`https://` で始まる場合)。
+Zabbix のユーザーメディアごとに送信先の Chat スペースを振り分けるため。
+`{ALERT.SENDTO}` が空やラベル文字列のときは、環境変数 → `config.yaml` の順で使う。
+複数ノード(Zabbix HA)に配備する場合、各ノードの `config.yaml` の値が違っても、
+メディアに URL を設定した宛先は同じスペースに届く。
 
 ---
 

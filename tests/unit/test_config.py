@@ -76,16 +76,47 @@ class TestNotificationConfig:
         config = NotificationConfig.load(yaml_path=sample_yaml)
         assert config.webhook_url == "https://chat.googleapis.com/env-webhook"
 
-    def test_load_priority_yaml_over_sendto(self, sample_yaml: Path) -> None:
-        """YAMLはALERT.SENDTOより優先される."""
+    def test_load_priority_sendto_over_yaml(self, sample_yaml: Path) -> None:
+        """URL の ALERT.SENDTO は YAML より優先される."""
         config = NotificationConfig.load(
             yaml_path=sample_yaml,
             alert_sendto="https://chat.googleapis.com/sendto-webhook",
         )
+        assert config.webhook_url == "https://chat.googleapis.com/sendto-webhook"
+
+    def test_load_priority_sendto_over_env(
+        self, sample_yaml: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """URL の ALERT.SENDTO は環境変数より優先される."""
+        monkeypatch.setenv("GCHAT_WEBHOOK_URL", "https://chat.googleapis.com/env-webhook")
+        config = NotificationConfig.load(
+            yaml_path=sample_yaml,
+            alert_sendto="https://chat.googleapis.com/sendto-webhook",
+        )
+        assert config.webhook_url == "https://chat.googleapis.com/sendto-webhook"
+
+    def test_load_non_url_sendto_falls_back_to_yaml(
+        self, sample_yaml: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """URL でない ALERT.SENDTO(ラベル等)は無視して YAML を使い、警告を出す."""
+        config = NotificationConfig.load(
+            yaml_path=sample_yaml,
+            alert_sendto="gchat-matsuura-gaku",
+        )
+        assert config.webhook_url == "https://chat.googleapis.com/v1/spaces/test"
+        assert "https:// で始まらないため無視" in caplog.text
+        assert "gchat-matsuura-gaku" not in caplog.text
+
+    def test_load_http_sendto_is_ignored(self, sample_yaml: Path) -> None:
+        """http:// の ALERT.SENDTO は採用しない(YAML を使う)."""
+        config = NotificationConfig.load(
+            yaml_path=sample_yaml,
+            alert_sendto="http://chat.googleapis.com/insecure",
+        )
         assert config.webhook_url == "https://chat.googleapis.com/v1/spaces/test"
 
-    def test_load_sendto_as_fallback(self) -> None:
-        """YAMLも環境変数もない場合はALERT.SENDTOを使用."""
+    def test_load_sendto_without_yaml_and_env(self) -> None:
+        """YAMLも環境変数もない場合もALERT.SENDTOを使用."""
         config = NotificationConfig.load(
             alert_sendto="https://chat.googleapis.com/sendto-webhook",
         )

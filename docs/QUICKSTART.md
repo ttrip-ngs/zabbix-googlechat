@@ -233,9 +233,9 @@ ITEM_LASTVALUE={ITEM.LASTVALUE}
 
 対処: 以下のいずれかで Webhook URL を設定する。
 
+- Zabbix メディアタイプのユーザーメディア「送信先」フィールド(`https://` で始まる値は下の2つより優先)
 - 環境変数: `export GCHAT_WEBHOOK_URL="https://..."`
 - 設定ファイル: `/etc/zabbix-googlechat/config.yaml` の `googlechat.webhook_url`
-- Zabbix メディアタイプのユーザーメディア「送信先」フィールド
 
 **パースエラー: 引数不足**
 

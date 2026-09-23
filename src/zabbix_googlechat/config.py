@@ -37,10 +37,10 @@ _DEFAULT_LOG_LEVEL = "INFO"
 class NotificationConfig:
     """通知設定クラス.
 
-    優先順位（高→低）:
-        1. 環境変数 GCHAT_WEBHOOK_URL
-        2. config.yaml の googlechat.webhook_url
-        3. {ALERT.SENDTO} 引数（parse_argv で上書き）
+    Webhook URL の優先順位（高→低）:
+        1. {ALERT.SENDTO} 引数（https:// で始まる場合のみ。宛先ユーザーごとの振り分けに使う）
+        2. 環境変数 GCHAT_WEBHOOK_URL
+        3. config.yaml の googlechat.webhook_url
     """
 
     # Google Chat設定
@@ -157,9 +157,12 @@ class NotificationConfig:
         """優先順位を考慮して設定を読み込む.
 
         優先順位（高→低）:
-            1. 環境変数
-            2. config.yaml
-            3. {ALERT.SENDTO} 引数
+            1. {ALERT.SENDTO} 引数（webhook_url のみ。https:// で始まる場合に限る）
+            2. 環境変数
+            3. config.yaml
+
+        {ALERT.SENDTO} を最優先にするのは、Zabbix のユーザーメディアごとに
+        送信先を振り分けるため。空やラベル文字列のときは環境変数・config.yaml を使う。
 
         Args:
             yaml_path: config.yamlのパス
@@ -171,11 +174,7 @@ class NotificationConfig:
         """
         config = cls()
 
-        # 3. {ALERT.SENDTO} を最低優先度として設定
-        if alert_sendto:
-            config.webhook_url = alert_sendto
-
-        # 2. config.yamlから上書き
+        # 3. config.yamlから読み込み
         if yaml_path:
             yaml_config = cls.from_yaml(yaml_path)
             if yaml_config.webhook_url:
@@ -189,7 +188,7 @@ class NotificationConfig:
             config.log_level = yaml_config.log_level
             config.log_file = yaml_config.log_file
 
-        # 1. 環境変数で最優先上書き
+        # 2. 環境変数で上書き
         if env_file:
             load_dotenv(env_file)
         else:
@@ -225,6 +224,16 @@ class NotificationConfig:
             with contextlib.suppress(ValueError):
                 config.max_retries = int(env_max_retries)
 
+        # 1. {ALERT.SENDTO} が URL なら最優先
+        if alert_sendto.startswith("https://"):
+            config.webhook_url = alert_sendto
+        elif alert_sendto:
+            # 値は出さない(誤入力でも key/token を含みうるため)
+            logger.warning(
+                "{ALERT.SENDTO} が https:// で始まらないため無視し、"
+                "環境変数 / config.yaml の Webhook URL を使います"
+            )
+
         return config
 
     def validate(self) -> None:
@@ -237,9 +246,9 @@ class NotificationConfig:
             raise ConfigurationError(
                 "Webhook URLが設定されていません。\n"
                 "以下のいずれかで設定してください:\n"
-                "  1. 環境変数 GCHAT_WEBHOOK_URL\n"
-                "  2. config.yaml の googlechat.webhook_url\n"
-                "  3. {ALERT.SENDTO} に Webhook URLを設定"
+                "  1. {ALERT.SENDTO} に Webhook URLを設定\n"
+                "  2. 環境変数 GCHAT_WEBHOOK_URL\n"
+                "  3. config.yaml の googlechat.webhook_url"
             )
 
         if not self.webhook_url.startswith("https://"):
