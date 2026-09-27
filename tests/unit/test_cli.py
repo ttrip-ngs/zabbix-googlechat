@@ -177,6 +177,33 @@ class TestMain:
 
         assert result == EXIT_SUCCESS
 
+    def test_sendto_url_overrides_config_yaml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """argv[0] の URL は config.yaml の URL より優先して送信先になる."""
+        yaml_path = _make_config_yaml(tmp_path, webhook_url="https://chat.googleapis.com/yaml")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
+        argv = ["https://chat.googleapis.com/sendto"] + self._VALID_ARGV[1:]
+        monkeypatch.setattr("sys.argv", ["prog"] + argv)
+
+        mock_response = MagicMock()
+        mock_response.retry_count = 0
+        mock_response.elapsed_ms = 50.0
+
+        with patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_sender_cls:
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender.send.return_value = mock_response
+            mock_sender_cls.return_value = mock_sender
+
+            result = main()
+
+        assert result == EXIT_SUCCESS
+        assert (
+            mock_sender_cls.call_args.kwargs["webhook_url"] == "https://chat.googleapis.com/sendto"
+        )
+
     def test_parse_error_insufficient_args(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """異常系: 引数が不足している場合、EXIT_PARSE_ERROR を返す."""
         monkeypatch.setattr("sys.argv", ["prog", "only_one_arg"])

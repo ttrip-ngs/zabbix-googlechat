@@ -52,7 +52,7 @@ https://chat.googleapis.com/v1/spaces/XXXXXXXXX/messages?key=YYYYYYY&token=ZZZZZ
 
 ## 3. 設定方法
 
-設定は3つの方法で行える。優先順位は「環境変数 > config.yaml > {ALERT.SENDTO}」。
+設定は3つの方法で行える。Webhook URL の優先順位は「{ALERT.SENDTO}(URL の場合) > 環境変数 > config.yaml」。
 
 ### 3.1 方法1: 環境変数（推奨）
 
@@ -97,7 +97,9 @@ logging:
 
 ### 3.3 方法3: {ALERT.SENDTO}
 
-Zabbixのメディアタイプ設定で、ユーザーメディアの「送信先」フィールドにWebhook URLを直接設定する。この方法は他の設定がない場合のフォールバックとして機能する。
+Zabbixのメディアタイプ設定で、ユーザーメディアの「送信先」フィールドにWebhook URLを直接設定する。
+`https://` で始まる値は環境変数・config.yaml より優先されるので、ユーザー(宛先)ごとに別の Chat スペースへ振り分けられる。
+空やラベル文字列の場合は無視され、環境変数・config.yaml の URL が使われる。
 
 ---
 
@@ -335,9 +337,9 @@ chmod 755 /var/log/zabbix-googlechat
 ```
 設定エラー: Webhook URLが設定されていません。
 以下のいずれかで設定してください:
-  1. 環境変数 GCHAT_WEBHOOK_URL
-  2. config.yaml の googlechat.webhook_url
-  3. {ALERT.SENDTO} に Webhook URLを設定
+  1. {ALERT.SENDTO} に Webhook URLを設定
+  2. 環境変数 GCHAT_WEBHOOK_URL
+  3. config.yaml の googlechat.webhook_url
 ```
 
 対処: 環境変数 `GCHAT_WEBHOOK_URL` を設定するか、`config/config.yaml` に Webhook URL を記入する。
