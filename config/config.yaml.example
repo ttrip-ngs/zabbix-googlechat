@@ -17,6 +17,18 @@ googlechat:
   # Zabbixアクションのメッセージ本文に CARD_STYLE=compact を書くとアクション単位で上書き可能。
   card_style: detailed
 
+  # --- Chat API で送信する場合（復旧時に障害メッセージを更新する） ---
+  # space を設定すると Webhook ではなく Chat API で送信する。
+  # 手順は docs/ZABBIX_SETUP.md の8章を参照。
+  # 環境変数 GCHAT_SPACE / GCHAT_CREDENTIALS_FILE で上書き可能。
+  # {ALERT.SENDTO} に spaces/XXXX を設定するとユーザーメディア単位で上書き可能。
+  # space: "spaces/XXXXXXXX"
+  # サービスアカウント鍵（JSON）。zabbix ユーザーだけが読める権限(600)にする
+  # credentials_file: /etc/zabbix-googlechat/service-account.json
+  # メッセージIDの接頭辞（client-<接頭辞>-<EVENT.ID>）。英小文字・数字・ハイフン20文字以内。
+  # 同じスペースに複数の Zabbix から送る場合は Zabbix ごとに変える
+  # message_id_prefix: zbx
+
 zabbix:
   # ZabbixサーバーのベースURL
   url: "https://zabbix.example.com"

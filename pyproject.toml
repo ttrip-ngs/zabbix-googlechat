@@ -4,13 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zabbix-googlechat"
-version = "1.1.0"
+version = "1.2.0"
 description = "Zabbix alert notification library for Google Chat"
 requires-python = ">=3.9"
 dependencies = [
     "requests>=2.28.0",
     "pyyaml>=6.0.0",
     "python-dotenv>=1.0.0",
+    "google-auth>=2.20.0",
 ]
 
 [project.scripts]
@@ -46,6 +47,9 @@ ignore = ["E501"]
 python_version = "3.9"
 strict = true
 ignore_missing_imports = false
+# google-auth は py.typed を持つが、Credentials.from_service_account_file と
+# AuthorizedSession.__init__ に型注釈が無い（外部ライブラリ起因）
+untyped_calls_exclude = ["google.auth", "google.oauth2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

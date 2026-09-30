@@ -274,8 +274,8 @@ CARD_STYLE=text"
 | コード | 意味 | 対処 |
 |---|---|---|
 | 0 | 成功 | - |
-| 1 | 設定エラー | Webhook URLが設定されているか確認 |
-| 2 | 送信エラー | ネットワーク、Webhook URLが正しいか確認 |
+| 1 | 設定エラー | Webhook URL（Chat API の場合はスペース名・サービスアカウント鍵）が設定されているか確認 |
+| 2 | 送信エラー | ネットワーク、Webhook URL（Chat API の場合はアプリのスペース追加・鍵の有効性）が正しいか確認 |
 | 3 | パースエラー | 引数の形式が正しいか確認 |
 | 99 | 予期しないエラー | ログを確認 |
 
@@ -335,11 +335,11 @@ chmod 755 /var/log/zabbix-googlechat
 **設定エラー: Webhook URLが設定されていません**
 
 ```
-設定エラー: Webhook URLが設定されていません。
-以下のいずれかで設定してください:
-  1. {ALERT.SENDTO} に Webhook URLを設定
-  2. 環境変数 GCHAT_WEBHOOK_URL
-  3. config.yaml の googlechat.webhook_url
+設定エラー: 送信先が設定されていません。
+以下のいずれかで Webhook URL（または Chat API のスペース名）を設定してください:
+  1. {ALERT.SENDTO} に Webhook URL / スペース名を設定
+  2. 環境変数 GCHAT_WEBHOOK_URL / GCHAT_SPACE
+  3. config.yaml の googlechat.webhook_url / googlechat.space
 ```
 
 対処: 環境変数 `GCHAT_WEBHOOK_URL` を設定するか、`config/config.yaml` に Webhook URL を記入する。
@@ -351,6 +351,8 @@ chmod 755 /var/log/zabbix-googlechat
 ```
 
 対処: Webhook URLのトークンが有効か確認する。Google ChatでWebhookを再作成し、URLを更新する。
+
+Chat API で送信している場合のエラーは [ZABBIX_SETUP.md 8.5](ZABBIX_SETUP.md#85-動作確認) を参照。
 
 **パースエラー: 引数不足**
 

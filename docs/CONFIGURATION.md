@@ -11,9 +11,13 @@
 
 例: 環境変数 `GCHAT_WEBHOOK_URL` が設定されていれば、`config.yaml` の `webhook_url` は無視される。
 
-**Webhook URL だけは `{ALERT.SENDTO}` 引数が最優先になる**(`https://` で始まる場合)。
+**送信先だけは `{ALERT.SENDTO}` 引数が最優先になる**(`https://` で始まる Webhook URL、
+または `spaces/` で始まる Chat API のスペース名の場合)。
 Zabbix のユーザーメディアごとに送信先の Chat スペースを振り分けるため。
 `{ALERT.SENDTO}` が空やラベル文字列のときは、環境変数 → `config.yaml` の順で使う。
+
+**送信方式**: スペース名(`space`)が決まれば Chat API、そうでなければ Webhook で送信する。
+`{ALERT.SENDTO}` が Webhook URL の場合は、`space` を設定していても Webhook で送信する。
 複数ノード(Zabbix HA)に配備する場合、各ノードの `config.yaml` の値が違っても、
 メディアに URL を設定した宛先は同じスペースに届く。
 
@@ -25,9 +29,13 @@ Zabbix のユーザーメディアごとに送信先の Chat スペースを振�
 
 ### 2.1 必須設定
 
+Webhook と Chat API のどちらかを設定する（`{ALERT.SENDTO}` で指定する場合は不要）。
+
 | 変数名 | 説明 | 例 |
 |---|---|---|
-| `GCHAT_WEBHOOK_URL` | Google Chat Webhook URL | `https://chat.googleapis.com/v1/spaces/XXX/messages?key=YYY&token=ZZZ` |
+| `GCHAT_WEBHOOK_URL` | Google Chat Webhook URL（Webhook で送信する場合） | `https://chat.googleapis.com/v1/spaces/XXX/messages?key=YYY&token=ZZZ` |
+| `GCHAT_SPACE` | 送信先スペース名（Chat API で送信する場合） | `spaces/XXXXXXXX` |
+| `GCHAT_CREDENTIALS_FILE` | サービスアカウント鍵(JSON)のパス（Chat API で送信する場合は必須） | `/etc/zabbix-googlechat/service-account.json` |
 
 ### 2.2 任意設定
 
@@ -89,6 +97,17 @@ googlechat:
   # メッセージスタイル: detailed / medium / compact / text
   # 環境変数 GCHAT_CARD_STYLE で上書き可能
   card_style: detailed
+
+  # Chat API の送信先スペース名（設定すると Webhook ではなく Chat API で送信する）
+  # 環境変数 GCHAT_SPACE で上書き可能
+  # space: "spaces/XXXXXXXX"
+
+  # サービスアカウント鍵（JSON）のパス（Chat API で送信する場合は必須）
+  # 環境変数 GCHAT_CREDENTIALS_FILE で上書き可能
+  # credentials_file: /etc/zabbix-googlechat/service-account.json
+
+  # メッセージIDの接頭辞（Chat API で送信する場合）
+  # message_id_prefix: zbx
 
 zabbix:
   # ZabbixサーバーのベースURL
@@ -167,6 +186,32 @@ Google Chat に送信するメッセージの表示スタイル。
 優先度2:        環境変数 GCHAT_CARD_STYLE
 優先度3 (最低): config.yaml の googlechat.card_style
 ```
+
+#### googlechat.space
+
+Chat API で送信する場合の送信先スペース名（`spaces/XXXXXXXX`）。
+
+- 設定すると Webhook ではなく Chat API で送信し、復旧時に障害発生のメッセージを復旧内容で置き換える
+- Chat アプリをスペースに追加しておく必要がある（手順は [ZABBIX_SETUP.md 8章](ZABBIX_SETUP.md#8-chat-api-で送信する復旧時に障害メッセージを更新)）
+- `{ALERT.SENDTO}` に `spaces/XXXXXXXX` を設定するとユーザーメディア単位で上書きできる
+
+#### googlechat.credentials_file
+
+Chat アプリとして認証するサービスアカウント鍵（JSON）のパス。
+
+- `space` を設定した場合は必須
+- 秘密情報のため、zabbix ユーザーだけが読める権限（600）で配置する
+
+#### googlechat.message_id_prefix
+
+Chat API で投稿するメッセージのID `client-<接頭辞>-<EVENT.ID>` の接頭辞。
+
+- デフォルト: `zbx`
+- config.yaml でのみ設定できる（環境変数は無い）
+- 英小文字・数字・ハイフンの20文字以内
+- 同じスペースに複数の Zabbix（別DB）から送る場合は、イベントIDの重複で別の障害のメッセージを
+  更新しないよう Zabbix ごとに変える（例: `zbx-fujisaki` / `zbx-ogori`）。
+  同じDBを使う Zabbix HA の各ノードは同じ値にする
 
 #### zabbix.url
 

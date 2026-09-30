@@ -26,6 +26,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from zabbix_googlechat.card_builder import build_payload
 from zabbix_googlechat.config import NotificationConfig
@@ -35,9 +36,9 @@ from zabbix_googlechat.exceptions import (
     WebhookConnectionError,
     WebhookPayloadError,
 )
-from zabbix_googlechat.models import CardStyle
+from zabbix_googlechat.models import AlertType, CardStyle, ZabbixEvent
 from zabbix_googlechat.parser import ZabbixParamParser
-from zabbix_googlechat.webhook_sender import GoogleChatWebhookSender
+from zabbix_googlechat.webhook_sender import GoogleChatWebhookSender, WebhookResponse
 
 # 終了コード定数
 EXIT_SUCCESS = 0
@@ -123,6 +124,55 @@ def setup_logging(config: NotificationConfig) -> None:
     )
 
 
+def _send_via_api(
+    config: NotificationConfig, event: ZabbixEvent, payload: dict[str, Any]
+) -> WebhookResponse:
+    """Chat API で送信する.
+
+    PROBLEM はイベントIDから決まるメッセージIDを付けて投稿し、RECOVERY は同じIDの
+    メッセージを復旧内容で置き換える（障害メッセージが無ければ新規投稿になる）。
+    UPDATE（確認・コメント）は新しいメッセージとして投稿する。
+
+    Raises:
+        ConfigurationError: サービスアカウント鍵を読み込めない場合
+    """
+    # google-auth は Chat API を使う場合だけ読み込む
+    # （Python 3.9 では import 時に FutureWarning を出すため、Webhook 利用時に出さない）
+    from zabbix_googlechat.chat_api_sender import GoogleChatApiSender, build_message_id
+
+    logger = logging.getLogger(__name__)
+    message_id = build_message_id(config.message_id_prefix, event.event_id)
+    if message_id is None and event.alert_type in (AlertType.PROBLEM, AlertType.RECOVERY):
+        logger.warning(
+            "EVENT_ID '%s' からメッセージIDを作れないため、復旧時の更新は行わず新規投稿します",
+            event.event_id,
+        )
+
+    with GoogleChatApiSender(
+        space=config.space,
+        credentials_file=config.credentials_file,
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_delay=config.retry_delay,
+    ) as sender:
+        if event.alert_type == AlertType.RECOVERY and message_id is not None:
+            return sender.upsert(payload, message_id)
+        if event.alert_type == AlertType.PROBLEM:
+            return sender.create(payload, message_id)
+        return sender.create(payload, None)
+
+
+def _send_via_webhook(config: NotificationConfig, payload: dict[str, Any]) -> WebhookResponse:
+    """Webhook で送信する."""
+    with GoogleChatWebhookSender(
+        webhook_url=config.webhook_url,
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_delay=config.retry_delay,
+    ) as sender:
+        return sender.send(payload)
+
+
 def main() -> int:
     """メイン処理.
 
@@ -190,15 +240,17 @@ def main() -> int:
     payload = build_payload(event, effective_style)
     logger.debug("カードビルド完了: style=%s", effective_style)
 
-    # 4. Webhook送信
+    # 4. 送信（space が設定されていれば Chat API、それ以外は Webhook）
     try:
-        with GoogleChatWebhookSender(
-            webhook_url=config.webhook_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-            retry_delay=config.retry_delay,
-        ) as sender:
-            response = sender.send(payload)
+        if config.space:
+            response = _send_via_api(config, event, payload)
+        else:
+            response = _send_via_webhook(config, payload)
+
+        if not response.success:
+            logger.error("送信失敗: %s (status=%d)", response.error_message, response.status_code)
+            print(f"送信エラー (HTTP {response.status_code}): {response.body}", file=sys.stderr)
+            return EXIT_SEND_ERROR
 
         logger.info(
             "通知送信完了: host=%s, trigger=%s, retry=%d, elapsed=%.1fms",
@@ -208,6 +260,11 @@ def main() -> int:
             response.elapsed_ms,
         )
         return EXIT_SUCCESS
+
+    except ConfigurationError as e:
+        logger.error("設定エラー: %s", e)
+        print(f"設定エラー: {e}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
 
     except WebhookPayloadError as e:
         logger.error("Webhookペイロードエラー: %s (status=%d)", e, e.status_code)
