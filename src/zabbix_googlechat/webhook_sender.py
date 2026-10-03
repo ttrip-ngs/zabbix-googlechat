@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -21,6 +21,8 @@ _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 # クライアントエラー（リトライ不要）
 _CLIENT_ERROR_STATUS_CODES = {400, 401, 403, 404}
 
+_SenderT = TypeVar("_SenderT", bound="_RetryingSender")
+
 
 @dataclass
 class WebhookResponse:
@@ -34,8 +36,8 @@ class WebhookResponse:
     error_message: str = ""
 
 
-class GoogleChatWebhookSender:
-    """Google Chat Webhook 送信クライアント.
+class _RetryingSender:
+    """リトライ付きで Google Chat へ HTTP リクエストを送る共通基底クラス.
 
     リトライ戦略:
         - 対象: 429 / 500 / 502 / 503 / 504 およびネットワーク障害
@@ -43,9 +45,19 @@ class GoogleChatWebhookSender:
         - バックオフ: 指数バックオフ（retry_delay * 2^retry_count）
     """
 
+    # ネットワーク障害としてリトライする例外（サブクラスで追加可能）
+    _retryable_errors: tuple[type[Exception], ...] = (
+        RequestsConnectionError,
+        ConnectionError,
+        Timeout,
+    )
+
+    # 呼び出し側で処理する想定内の HTTP ステータス（success=False で返し、ERROR ログを出さない）
+    _expected_statuses: frozenset[int] = frozenset()
+
     def __init__(
         self,
-        webhook_url: str,
+        session: requests.Session,
         timeout: int = 10,
         max_retries: int = 3,
         retry_delay: float = 1.0,
@@ -53,23 +65,31 @@ class GoogleChatWebhookSender:
         """初期化.
 
         Args:
-            webhook_url: Google Chat Webhook URL
+            session: 送信に使う HTTP セッション
             timeout: HTTPリクエストタイムアウト（秒）
             max_retries: 最大リトライ回数（0=リトライなし）
             retry_delay: リトライ間隔基準値（秒）
         """
-        self._webhook_url = webhook_url
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_delay = retry_delay
-        self._session = requests.Session()
+        self._session = session
         self._session.headers.update({"Content-Type": "application/json; charset=UTF-8"})
 
-    def send(self, payload: dict[str, Any]) -> WebhookResponse:
-        """Google Chat にペイロードを送信する.
+    def _request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, Any],
+        params: dict[str, str] | None = None,
+    ) -> WebhookResponse:
+        """ペイロードをリトライ付きで送信する.
 
         Args:
+            method: HTTPメソッド（POST / PATCH）
+            url: 送信先URL
             payload: 送信するJSONペイロード
+            params: クエリパラメータ
 
         Returns:
             WebhookResponse
@@ -91,15 +111,17 @@ class GoogleChatWebhookSender:
                 time.sleep(delay)
 
             try:
-                response = self._session.post(
-                    self._webhook_url,
+                response = self._session.request(
+                    method,
+                    url,
+                    params=params,
                     json=payload,
                     timeout=self._timeout,
                 )
                 elapsed_ms = (time.monotonic() - start_time) * 1000
 
                 logger.debug(
-                    "Webhook送信レスポンス: status=%d, elapsed=%.1fms",
+                    "送信レスポンス: status=%d, elapsed=%.1fms",
                     response.status_code,
                     elapsed_ms,
                 )
@@ -115,7 +137,7 @@ class GoogleChatWebhookSender:
                 # 成功
                 if response.status_code == 200:  # noqa: PLR2004
                     logger.info(
-                        "Webhook送信成功: status=%d, elapsed=%.1fms, retry=%d",
+                        "送信成功: status=%d, elapsed=%.1fms, retry=%d",
                         response.status_code,
                         elapsed_ms,
                         retry_count,
@@ -131,7 +153,7 @@ class GoogleChatWebhookSender:
                 # サーバーエラー（リトライ対象）
                 if response.status_code in _RETRYABLE_STATUS_CODES:
                     logger.warning(
-                        "Webhook送信失敗（リトライ対象）: HTTP %d, retry=%d/%d",
+                        "送信失敗（リトライ対象）: HTTP %d, retry=%d/%d",
                         response.status_code,
                         retry_count,
                         self._max_retries,
@@ -144,7 +166,10 @@ class GoogleChatWebhookSender:
                     continue
 
                 # その他のエラー
-                logger.error("予期しないHTTPステータス: %d", response.status_code)
+                if response.status_code in self._expected_statuses:
+                    logger.debug("HTTPステータス %d を呼び出し側で処理", response.status_code)
+                else:
+                    logger.error("予期しないHTTPステータス: %d", response.status_code)
                 return WebhookResponse(
                     success=False,
                     status_code=response.status_code,
@@ -157,10 +182,10 @@ class GoogleChatWebhookSender:
             except WebhookPayloadError:
                 raise
 
-            except (RequestsConnectionError, ConnectionError, Timeout) as e:
+            except self._retryable_errors as e:
                 elapsed_ms = (time.monotonic() - start_time) * 1000
                 logger.warning(
-                    "Webhook接続エラー: %s, retry=%d/%d",
+                    "接続エラー: %s, retry=%d/%d",
                     e,
                     retry_count,
                     self._max_retries,
@@ -171,7 +196,7 @@ class GoogleChatWebhookSender:
 
             except RequestException as e:
                 elapsed_ms = (time.monotonic() - start_time) * 1000
-                logger.error("Webhookリクエストエラー: %s", e)
+                logger.error("送信リクエストエラー: %s", e)
                 raise WebhookConnectionError(
                     f"Webhookリクエストエラー: {e}",
                     retry_count=retry_count,
@@ -187,8 +212,45 @@ class GoogleChatWebhookSender:
         """HTTPセッションをクローズする."""
         self._session.close()
 
-    def __enter__(self) -> GoogleChatWebhookSender:
+    def __enter__(self: _SenderT) -> _SenderT:
         return self
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+class GoogleChatWebhookSender(_RetryingSender):
+    """Google Chat Webhook 送信クライアント（新規投稿のみ。投稿済みメッセージは更新できない）."""
+
+    def __init__(
+        self,
+        webhook_url: str,
+        timeout: int = 10,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ) -> None:
+        """初期化.
+
+        Args:
+            webhook_url: Google Chat Webhook URL
+            timeout: HTTPリクエストタイムアウト（秒）
+            max_retries: 最大リトライ回数（0=リトライなし）
+            retry_delay: リトライ間隔基準値（秒）
+        """
+        super().__init__(requests.Session(), timeout, max_retries, retry_delay)
+        self._webhook_url = webhook_url
+
+    def send(self, payload: dict[str, Any]) -> WebhookResponse:
+        """Google Chat にペイロードを送信する.
+
+        Args:
+            payload: 送信するJSONペイロード
+
+        Returns:
+            WebhookResponse
+
+        Raises:
+            WebhookPayloadError: 400 Bad Request など修正不可能なエラー
+            WebhookConnectionError: リトライ上限超過後もネットワーク障害継続
+        """
+        return self._request("POST", self._webhook_url, payload)

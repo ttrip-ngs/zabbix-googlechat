@@ -21,12 +21,14 @@ class CardStyle(str, Enum):
     medium:   2セクション維持・各項目を topLabel 無し1行に圧縮
     compact:  ヘッダー + textParagraph 1枚 + ボタン（カード1枚に集約）
     text:     cardsV2 を使わないプレーンテキスト（最小スペース）
+    headline: 見出しに状態とホスト、本文にトリガー名。絵文字を使わず状態色のボタンで示す
     """
 
     DETAILED = "detailed"
     MEDIUM = "medium"
     COMPACT = "compact"
     TEXT = "text"
+    HEADLINE = "headline"
 
 
 # デフォルトのメッセージスタイル

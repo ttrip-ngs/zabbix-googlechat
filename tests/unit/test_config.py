@@ -104,7 +104,7 @@ class TestNotificationConfig:
             alert_sendto="gchat-matsuura-gaku",
         )
         assert config.webhook_url == "https://chat.googleapis.com/v1/spaces/test"
-        assert "https:// で始まらないため無視" in caplog.text
+        assert "https:// / spaces/ で始まらないため無視" in caplog.text
         assert "gchat-matsuura-gaku" not in caplog.text
 
     def test_load_http_sendto_is_ignored(self, sample_yaml: Path) -> None:
@@ -198,3 +198,77 @@ class TestNotificationConfig:
         )
         config.validate()
         assert config.card_style == "medium"
+
+    # ---- Chat API 設定のテスト ----
+
+    def test_api_settings_from_yaml(self, tmp_path: Path) -> None:
+        data = {
+            "googlechat": {
+                "space": "spaces/AAAA",
+                "credentials_file": "/etc/zabbix-googlechat/sa.json",
+                "message_id_prefix": "zbx-ogori",
+            }
+        }
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(yaml.dump(data), encoding="utf-8")
+        config = NotificationConfig.load(yaml_path=yaml_file)
+        assert config.space == "spaces/AAAA"
+        assert config.credentials_file == "/etc/zabbix-googlechat/sa.json"
+        assert config.message_id_prefix == "zbx-ogori"
+
+    def test_api_settings_env_over_yaml(
+        self, sample_yaml: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("GCHAT_SPACE", "spaces/ENV")
+        monkeypatch.setenv("GCHAT_CREDENTIALS_FILE", "/env/sa.json")
+        config = NotificationConfig.load(yaml_path=sample_yaml)
+        assert config.space == "spaces/ENV"
+        assert config.credentials_file == "/env/sa.json"
+
+    def test_sendto_space_sets_space(self, sample_yaml: Path) -> None:
+        """spaces/ で始まる ALERT.SENDTO はスペース名として使う."""
+        config = NotificationConfig.load(yaml_path=sample_yaml, alert_sendto="spaces/SENDTO")
+        assert config.space == "spaces/SENDTO"
+
+    def test_sendto_url_disables_configured_space(
+        self, sample_yaml: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ALERT.SENDTO が Webhook URL なら、設定済みのスペースより優先して Webhook で送る."""
+        monkeypatch.setenv("GCHAT_SPACE", "spaces/ENV")
+        config = NotificationConfig.load(
+            yaml_path=sample_yaml, alert_sendto="https://chat.googleapis.com/sendto"
+        )
+        assert config.space == ""
+        assert config.webhook_url == "https://chat.googleapis.com/sendto"
+
+    def test_validate_api_valid(self, tmp_path: Path) -> None:
+        credentials = tmp_path / "sa.json"
+        credentials.write_text("{}", encoding="utf-8")
+        config = NotificationConfig(space="spaces/AAAA", credentials_file=str(credentials))
+        config.validate()  # Webhook URL が無くても例外が発生しないこと
+
+    def test_validate_api_missing_credentials(self) -> None:
+        config = NotificationConfig(space="spaces/AAAA")
+        with pytest.raises(ConfigurationError, match="サービスアカウント鍵が必要"):
+            config.validate()
+
+    def test_validate_api_credentials_not_found(self) -> None:
+        config = NotificationConfig(space="spaces/AAAA", credentials_file="/nonexistent/sa.json")
+        with pytest.raises(ConfigurationError, match="見つかりません"):
+            config.validate()
+
+    def test_validate_api_invalid_space(self, tmp_path: Path) -> None:
+        credentials = tmp_path / "sa.json"
+        credentials.write_text("{}", encoding="utf-8")
+        config = NotificationConfig(space="spaces/A/B", credentials_file=str(credentials))
+        with pytest.raises(ConfigurationError, match="無効なスペース名"):
+            config.validate()
+
+    def test_validate_api_invalid_message_id_prefix(self, tmp_path: Path) -> None:
+        credentials = tmp_path / "sa.json"
+        credentials.write_text("{}", encoding="utf-8")
+        config = NotificationConfig(
+            space="spaces/AAAA", credentials_file=str(credentials), message_id_prefix="ZBX"
+        )
+        with pytest.raises(ConfigurationError, match="無効なメッセージID接頭辞"):
+            config.validate()
