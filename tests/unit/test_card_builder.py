@@ -5,6 +5,7 @@ import pytest
 from zabbix_googlechat.card_builder import (
     CompactCardBuilder,
     GoogleChatCardBuilder,
+    HeadlineCardBuilder,
     MediumCardBuilder,
     PlainTextBuilder,
     build_payload,
@@ -252,6 +253,83 @@ class TestPlainTextBuilder:
         assert "18:30:00" in payload["text"]
 
 
+class TestHeadlineCardBuilder:
+    @staticmethod
+    def _card(payload: dict) -> dict:
+        return payload["cardsV2"][0]["card"]
+
+    @classmethod
+    def _widgets(cls, payload: dict) -> list:
+        return cls._card(payload)["sections"][0]["widgets"]
+
+    def test_problem_header_shows_state_and_host(self, problem_event: ZabbixEvent) -> None:
+        header = self._card(HeadlineCardBuilder(problem_event).build())["header"]
+        assert header["title"] == "【障害】web01.example.com"
+        assert header["subtitle"] == "重要度 High"
+
+    def test_problem_trigger_is_red_bold(self, problem_event: ZabbixEvent) -> None:
+        body = self._widgets(HeadlineCardBuilder(problem_event).build())[0]["textParagraph"]["text"]
+        assert body.startswith('<font color="#d93025"><b>CPU使用率が高い</b></font><br>')
+        assert "発生 2026.03.11 18:00:00" in body
+        assert "現在値 95%" in body
+
+    def test_problem_button_is_filled_red(self, problem_event: ZabbixEvent) -> None:
+        button = self._widgets(HeadlineCardBuilder(problem_event).build())[1]["buttonList"][
+            "buttons"
+        ][0]
+        assert button["type"] == "FILLED"
+        assert button["color"]["red"] > button["color"]["green"]
+        assert "eventid=12345" in button["onClick"]["openLink"]["url"]
+
+    def test_no_emoji(self, problem_event: ZabbixEvent, recovery_event: ZabbixEvent) -> None:
+        for event in (problem_event, recovery_event):
+            payload = str(HeadlineCardBuilder(event).build())
+            assert not any(ord(ch) >= 0x1F000 for ch in payload)
+
+    def test_recovery_is_single_row_without_header(self, recovery_event: ZabbixEvent) -> None:
+        payload = HeadlineCardBuilder(recovery_event).build()
+        assert "header" not in self._card(payload)
+        widgets = self._widgets(payload)
+        assert len(widgets) == 1
+        row = widgets[0]["decoratedText"]
+        assert "復旧" in row["text"]
+        assert "web01.example.com" in row["text"]
+        assert row["bottomLabel"] == "CPU使用率が高い\u30002026.03.11 18:00 - 18:30（30分）"
+        assert row["button"]["type"] == "BORDERLESS"
+
+    def test_recovery_over_days(self, recovery_event: ZabbixEvent) -> None:
+        recovery_event.recovery_date = "2026.03.13"
+        recovery_event.recovery_time = "20:45:00"
+        row = self._widgets(HeadlineCardBuilder(recovery_event).build())[0]["decoratedText"]
+        assert "2026.03.11 18:00 - 2026.03.13 20:45（2日2時間）" in row["bottomLabel"]
+
+    def test_recovery_unparsable_datetime_uses_raw_values(
+        self, recovery_event: ZabbixEvent
+    ) -> None:
+        recovery_event.event_date = "{EVENT.DATE}"
+        row = self._widgets(HeadlineCardBuilder(recovery_event).build())[0]["decoratedText"]
+        assert "{EVENT.DATE} 18:00:00 - 2026.03.11 18:30:00" in row["bottomLabel"]
+
+    def test_update_shows_ack(self, update_event: ZabbixEvent) -> None:
+        payload = HeadlineCardBuilder(update_event).build()
+        assert self._card(payload)["header"]["title"] == "【更新】web01.example.com"
+        assert "確認 admin" in self._widgets(payload)[0]["textParagraph"]["text"]
+
+    def test_escapes_html(self, problem_event: ZabbixEvent) -> None:
+        problem_event.trigger_name = "Link down <uplink> & more"
+        body = self._widgets(HeadlineCardBuilder(problem_event).build())[0]["textParagraph"]["text"]
+        assert "<b>Link down &lt;uplink&gt; &amp; more</b>" in body
+
+    def test_no_button_without_zabbix_url(
+        self, problem_event: ZabbixEvent, recovery_event: ZabbixEvent
+    ) -> None:
+        problem_event.zabbix_url = ""
+        recovery_event.zabbix_url = ""
+        assert len(self._widgets(HeadlineCardBuilder(problem_event).build())) == 1
+        row = self._widgets(HeadlineCardBuilder(recovery_event).build())[0]["decoratedText"]
+        assert "button" not in row
+
+
 class TestBuildPayloadFactory:
     def test_detailed(self, problem_event: ZabbixEvent) -> None:
         payload = build_payload(problem_event, "detailed")
@@ -272,6 +350,10 @@ class TestBuildPayloadFactory:
         payload = build_payload(problem_event, "text")
         assert "cardsV2" not in payload
         assert "text" in payload
+
+    def test_headline(self, problem_event: ZabbixEvent) -> None:
+        payload = build_payload(problem_event, "headline")
+        assert payload["cardsV2"][0]["card"]["header"]["title"].startswith("【障害】")
 
     def test_unknown_style_falls_back_to_detailed(self, problem_event: ZabbixEvent) -> None:
         """未知スタイルは detailed にフォールバックする（通知は失わない）."""

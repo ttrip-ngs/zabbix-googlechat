@@ -13,13 +13,15 @@ ZabbixのアラートイベントをGoogle Chatに通知する外部スクリプ
 | Python | 3.9 / 3.10 / 3.11 / 3.12 / 3.13 |
 | Zabbix | 6.0以上 |
 | Google Chat Webhook API | v1（Card v2形式） |
+| Google Chat API | v1（Chat アプリ・サービスアカウント認証。任意） |
 
 ### 1.3 機能一覧
 
 - アラートタイプ別通知（PROBLEM / RECOVERY / UPDATE）
 - 重要度別絵文字表示
 - Google Chat Card v2形式リッチカード通知
-- Webhook URL優先順位管理（環境変数 > config.yaml > {ALERT.SENDTO}）
+- Webhook URL優先順位管理（{ALERT.SENDTO}(URLの場合) > 環境変数 > config.yaml）
+- Chat API 送信（任意）: 復旧時に障害発生のメッセージを復旧内容で置き換える
 - 指数バックオフによる自動リトライ
 - ログファイル出力対応
 
@@ -135,7 +137,7 @@ Zabbixアラートイベントの全情報を保持するデータクラス。
 
 #### CardStyle (Enum)
 
-Google Chat メッセージの表示スタイル。`detailed` / `medium` / `compact` / `text` の4値。
+Google Chat メッセージの表示スタイル。`detailed` / `medium` / `compact` / `text` / `headline` の5値。
 既定は `detailed`。未知の値は `detailed` にフォールバックする。
 
 プロパティ:
@@ -206,7 +208,10 @@ argv[2]: {ALERT.MESSAGE} - メッセージ本文（KEY=VALUE形式）
 
 | フィールド | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `webhook_url` | str | "" | Google Chat Webhook URL（必須） |
+| `webhook_url` | str | "" | Google Chat Webhook URL（Webhook 送信時は必須） |
+| `space` | str | "" | Chat API の送信先スペース名。設定すると Chat API で送信する |
+| `credentials_file` | str | "" | サービスアカウント鍵(JSON)のパス（Chat API 送信時は必須） |
+| `message_id_prefix` | str | "zbx" | Chat API のメッセージID `client-<接頭辞>-<EVENT.ID>` の接頭辞 |
 | `timeout` | int | 10 | HTTPタイムアウト（秒） |
 | `max_retries` | int | 3 | 最大リトライ回数 |
 | `retry_delay` | float | 1.0 | リトライ間隔基準値（秒） |
@@ -217,9 +222,10 @@ argv[2]: {ALERT.MESSAGE} - メッセージ本文（KEY=VALUE形式）
 **設定優先順位（高→低）**
 
 ```
-1. 環境変数 (GCHAT_WEBHOOK_URL 等)
-2. config/config.yaml
-3. {ALERT.SENDTO} 引数
+1. {ALERT.SENDTO} 引数(https:// なら webhook_url、spaces/ なら space。
+   https:// の場合は space を空にして Webhook で送信する)
+2. 環境変数 (GCHAT_WEBHOOK_URL 等)
+3. config/config.yaml
 ```
 
 **クラスメソッド**
@@ -233,8 +239,9 @@ argv[2]: {ALERT.MESSAGE} - メッセージ本文（KEY=VALUE形式）
 
 **validate() の検証内容**
 
-- `webhook_url` が空でないこと
-- `webhook_url` が `https://` で始まること
+- Webhook 送信時（`space` が空）: `webhook_url` が空でなく `https://` で始まること
+- Chat API 送信時: `space` が `spaces/XXXX` 形式、`credentials_file` が存在するファイル、
+  `message_id_prefix` が英小文字・数字・ハイフンの20文字以内であること
 - `timeout` が正の整数であること
 - `max_retries` が0以上であること
 - `log_level` が有効な値（DEBUG/INFO/WARNING/ERROR/CRITICAL）であること
@@ -322,6 +329,8 @@ Google Chat Webhook APIへのHTTP POST送信クライアント。
 
 `max_retries` 回のリトライ後も失敗した場合は `WebhookConnectionError` を送出する。
 
+リトライ処理は基底クラス `_RetryingSender` に持ち、Chat API 送信クライアントと共有する。
+
 #### WebhookResponse (dataclass)
 
 | フィールド | 型 | 説明 |
@@ -332,6 +341,29 @@ Google Chat Webhook APIへのHTTP POST送信クライアント。
 | `retry_count` | int | 実際のリトライ回数 |
 | `elapsed_ms` | float | 送信所要時間（ms） |
 | `error_message` | str | エラーメッセージ（失敗時） |
+
+### 3.5.1 chat_api_sender.py
+
+#### GoogleChatApiSender
+
+Google Chat API（`spaces.messages`）の送信クライアント。サービスアカウント鍵から
+`chat.bot` スコープのアクセストークンを取得し、Chat アプリとして送信する。
+リトライ戦略は `GoogleChatWebhookSender` と同じ（トークン取得時のネットワーク障害もリトライ対象）。
+
+| メソッド | API | 説明 |
+|---|---|---|
+| `create(payload, message_id)` | `POST spaces/{space}/messages?messageId=` | 新規投稿。IDが使用済み(409)ならIDなしで投稿し直す |
+| `upsert(payload, message_id)` | `PATCH spaces/{space}/messages/{id}?updateMask=text,cardsV2&allowMissing=true` | 更新。対象が無ければ同じIDで新規投稿。400 / 403 / 404 ならIDなしで投稿し直す |
+
+- 鍵を読み込めない場合は `ConfigurationError`、トークン取得失敗（鍵の失効等）は
+  `WebhookPayloadError`(status_code=401) を送出する
+- Webhook と異なり、Chat アプリは自分が投稿したメッセージを更新できる
+
+#### build_message_id(prefix, event_id)
+
+`client-<prefix>-<event_id>` を返す。イベントIDが数字でない、または63文字を超える場合は None
+（IDなしで新規投稿し、復旧時の更新は行わない）。復旧時の `{EVENT.ID}` は障害イベントのIDなので、
+PROBLEM と RECOVERY で同じIDになる。
 
 ### 3.6 cli.py
 
@@ -419,7 +451,12 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 
 5. Card v2ペイロード構築 (GoogleChatCardBuilder.build)
 
-6. Webhook送信 (GoogleChatWebhookSender.send)
+6. 送信
+   ├── space あり: Chat API (GoogleChatApiSender)
+   │     PROBLEM → create(ID付き) / RECOVERY → upsert(同じID) / UPDATE → create(IDなし)
+   └── space なし: Webhook (GoogleChatWebhookSender.send)
+   ├── 鍵の読込失敗 (ConfigurationError) → stderr出力 → 終了コード1
+   ├── 成功以外のHTTPステータス (success=False) → stderr出力 → 終了コード2
    ├── WebhookPayloadError → stderr出力 → 終了コード2
    ├── WebhookConnectionError → stderr出力 → 終了コード2
    ├── その他例外 → stderr出力 → 終了コード99
@@ -446,7 +483,7 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 
 ## 5. Google Chat 送信ペイロード形式
 
-メッセージスタイル（`card_style`）により4種類のペイロード形式を出力する。
+メッセージスタイル（`card_style`）により5種類のペイロード形式を出力する。
 スタイルの選択方法と優先順位は §6 を参照。
 
 ### 5.1 detailed スタイル（既定）
@@ -522,11 +559,29 @@ Zabbixリンクは本文末尾にURLを記載する。
 }
 ```
 
+### 5.4.1 headline スタイル
+
+チャットを開いたとき障害中のものに目が行くようにするスタイル。絵文字を使わない。
+
+- PROBLEM / UPDATE: ヘッダー `【障害】<ホスト>`（UPDATE は `【更新】`）、サブタイトル `重要度 <重要度>`、
+  textParagraph にトリガー名（状態色の太字）と「発生・現在値（・確認者・コメント）」の1行、
+  状態色の塗りつぶしボタン（`type: FILLED`, `color`）
+- RECOVERY: ヘッダーなしの decoratedText 1段。`text` に緑の「復旧」とグレーのホスト名、
+  `bottomLabel` にトリガー名と期間（`2026.03.11 18:00 - 18:30（30分）`）、枠なしボタン（`BORDERLESS`）。
+  Chat API 送信では障害メッセージがこの形に置き換わる
+- textParagraph / decoratedText は HTML として解釈されるため、Zabbix 由来の値は HTML エスケープする
+
 ### 5.5 Webhook URL形式
 
 ```
 https://chat.googleapis.com/v1/spaces/{SPACE_ID}/messages?key={KEY}&token={TOKEN}
 ```
+
+### 5.6 Chat API 送信時
+
+ペイロードは Webhook と同じ形式を `spaces.messages.create` / `spaces.messages.patch` の
+リクエストボディとして送る。更新時は `updateMask=text,cardsV2` で両方を置き換えるため、
+障害時と復旧時でスタイル（カード / テキスト）が異なっても前の内容は残らない。
 
 ---
 
@@ -540,7 +595,10 @@ googlechat:
   timeout: 10              # HTTPタイムアウト（秒）
   max_retries: 3           # 最大リトライ回数
   retry_delay: 1.0         # リトライ間隔基準値（秒）
-  card_style: detailed     # detailed / medium / compact / text
+  card_style: detailed     # detailed / medium / compact / text / headline
+  space: ""                # Chat API の送信先（spaces/XXXX）。設定すると Chat API で送信
+  credentials_file: ""     # サービスアカウント鍵(JSON)のパス
+  message_id_prefix: zbx   # Chat API のメッセージID接頭辞
 
 zabbix:
   url: "https://zabbix.example.com"
@@ -554,7 +612,9 @@ logging:
 
 | 変数名 | 対応フィールド | デフォルト | 必須 |
 |---|---|---|---|
-| `GCHAT_WEBHOOK_URL` | webhook_url | - | 必須 |
+| `GCHAT_WEBHOOK_URL` | webhook_url | - | Webhook 送信時は必須 |
+| `GCHAT_SPACE` | space | "" | 任意（設定すると Chat API で送信） |
+| `GCHAT_CREDENTIALS_FILE` | credentials_file | "" | Chat API 送信時は必須 |
 | `ZABBIX_URL` | zabbix_url | "" | 任意 |
 | `GCHAT_TIMEOUT` | timeout | 10 | 任意 |
 | `GCHAT_MAX_RETRIES` | max_retries | 3 | 任意 |
@@ -574,6 +634,7 @@ logging:
 | `requests` | >=2.28.0 | HTTP Webhook送信 |
 | `pyyaml` | >=6.0.0 | config.yaml解析 |
 | `python-dotenv` | >=1.0.0 | .envファイル読込 |
+| `google-auth` | >=2.20.0 | Chat API のサービスアカウント認証（Chat API 送信時のみ import） |
 
 開発用:
 

@@ -35,8 +35,10 @@ sudo bash scripts/install.sh
 - アラートタイプ別の絵文字表示 (PROBLEM: 🔴, RECOVERY: 🟢, UPDATE: 🔵)
 - 重要度別の絵文字表示 (Disaster: 🔥, High: 🔴, Warning: 🟡, etc.)
 - Google Chat Card v2 形式のリッチカード通知
-- 4種類のメッセージスタイル（detailed / medium / compact / text）をアクション単位で選択可能
-- Webhook URL の優先順位管理（環境変数 > config.yaml > {ALERT.SENDTO}）
+- 5種類のメッセージスタイル（detailed / medium / compact / text / headline）をアクション単位で選択可能
+- Chat API 送信（任意）: 復旧時に障害発生のメッセージを復旧内容で置き換える
+  （Chat アプリ + サービスアカウントが必要。[docs/ZABBIX_SETUP.md](docs/ZABBIX_SETUP.md) 8章）
+- Webhook URL の優先順位管理（{ALERT.SENDTO}(URLの場合) > 環境変数 > config.yaml）
 - 自動リトライ（指数バックオフ）
 - Python 3.9 / 3.10 / 3.11 / 3.12 / 3.13 対応
 
@@ -80,6 +82,7 @@ cp config/config.yaml.example config/config.yaml
 ### 方法 3: {ALERT.SENDTO}
 
 ZabbixメディアタイプのSend toフィールドにWebhook URLを設定する。
+`https://` で始まる値は環境変数・config.yaml より優先されるので、宛先ユーザーごとに Chat スペースを振り分けられる。
 
 ## Zabbix設定
 

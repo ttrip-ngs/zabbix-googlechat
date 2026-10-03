@@ -1,10 +1,11 @@
 """Google Chat メッセージペイロードビルダー.
 
-メッセージスタイルは 4 種類:
+メッセージスタイルは 5 種類:
     detailed: 2セクション + 各項目 decoratedText(topLabel+text)（情報量重視・既定）
     medium:   2セクション維持・各項目を topLabel 無しの1行 decoratedText に圧縮
     compact:  ヘッダー + textParagraph 1枚 + ボタン（カード1枚に集約）
     text:     cardsV2 を使わないプレーンテキスト（最小スペース）
+    headline: 見出しに状態とホスト、本文にトリガー名。絵文字を使わず状態色のボタンで示す
 
 外部からは build_payload(event, style) を呼び出してペイロード辞書を取得する。
 GoogleChatCardBuilder は detailed スタイルの実装であり、後方互換のため公開している。
@@ -12,7 +13,9 @@ GoogleChatCardBuilder は detailed スタイルの実装であり、後方互換
 
 from __future__ import annotations
 
+import html
 import logging
+from datetime import datetime
 from typing import Any
 
 from zabbix_googlechat.models import (
@@ -501,12 +504,178 @@ class PlainTextBuilder(_CardBuilderBase):
         return {"text": "\n".join(lines)}
 
 
+class HeadlineCardBuilder(_CardBuilderBase):
+    """headline スタイル: チャットを開いたとき障害中のものに目が行くようにする.
+
+    障害中・更新（見出し付き、トリガー名を状態色の太字、塗りつぶしボタン）:
+        【障害】web01.example.com      ← 見出し（状態 + ホスト）
+        重要度 High                    ← サブタイトル
+        CPU使用率が高い                ← トリガー名（赤・太字）
+        発生 2026.03.11 18:00  現在値 95%
+        [Zabbixで確認]                 ← 赤の塗りつぶしボタン
+
+    復旧（見出しなしの1段。全体をグレーにして目立たせない）:
+        (チェック) 復旧  web01.example.com                  [Zabbix]
+                  CPU使用率が高い  2026.03.11 18:00 - 18:30（30分）
+
+    絵文字は使わない。Chat API 送信では復旧時に障害メッセージをこの形に置き換える。
+    """
+
+    _STATE_LABEL: dict[AlertType, str] = {
+        AlertType.PROBLEM: "障害",
+        AlertType.RECOVERY: "復旧",
+        AlertType.UPDATE: "更新",
+    }
+
+    # 障害中・更新の強調色（トリガー名の文字色とボタンの色）
+    _STATE_HEX: dict[AlertType, str] = {
+        AlertType.PROBLEM: "#d93025",
+        AlertType.UPDATE: "#1a73e8",
+    }
+
+    # 復旧の文字色（「復旧」は緑、それ以外はグレー）
+    _RECOVERY_HEX = "#188038"
+    _MUTED_HEX = "#80868b"
+
+    # Zabbix の {EVENT.DATE} {EVENT.TIME} の形式
+    _ZABBIX_DATETIME_FORMAT = "%Y.%m.%d %H:%M:%S"
+
+    def build(self) -> dict[str, Any]:
+        """cardsV2 ペイロードを構築する."""
+        if self._event.alert_type == AlertType.RECOVERY:
+            widgets = [self._build_recovery_row()]
+            header = None
+        else:
+            widgets = self._build_active_widgets()
+            header = {
+                "title": f"【{self._STATE_LABEL[self._event.alert_type]}】{self._host()}",
+                "subtitle": f"重要度 {self._event.trigger_severity.value}",
+            }
+
+        card: dict[str, Any] = {"sections": [{"widgets": widgets}]}
+        if header:
+            card["header"] = header
+        return {
+            "cardsV2": [
+                {"cardId": f"zabbix-alert-{self._event.event_id or 'unknown'}", "card": card}
+            ]
+        }
+
+    def _host(self) -> str:
+        return self._event.host_name or "(ホスト不明)"
+
+    def _trigger(self) -> str:
+        """トリガー名（textParagraph 等は HTML として解釈されるためエスケープする）."""
+        return html.escape(self._event.trigger_name or "(トリガー不明)")
+
+    def _build_active_widgets(self) -> list[dict[str, Any]]:
+        """障害中・更新のウィジェット（トリガー名 + 詳細1行 + ボタン）."""
+        event = self._event
+        color = self._STATE_HEX[event.alert_type]
+        lines = [f'<font color="{color}"><b>{self._trigger()}</b></font>']
+
+        details: list[str] = []
+        if event.event_datetime:
+            details.append(f"発生 {event.event_datetime}")
+        if event.item_last_value:
+            details.append(f"現在値 {event.item_last_value}")
+        if event.alert_type == AlertType.UPDATE:
+            if event.ack_author:
+                details.append(f"確認 {event.ack_author}")
+            if event.ack_message:
+                details.append(event.ack_message)
+        if details:
+            lines.append(html.escape("\u3000".join(details)))
+
+        widgets: list[dict[str, Any]] = [{"textParagraph": {"text": "<br>".join(lines)}}]
+        link_url = self._link_url()
+        if link_url:
+            widgets.append(
+                {
+                    "buttonList": {
+                        "buttons": [
+                            {
+                                "text": "Zabbixで確認",
+                                "type": "FILLED",
+                                "color": _hex_to_color(color),
+                                "onClick": {"openLink": {"url": link_url}},
+                            }
+                        ]
+                    }
+                }
+            )
+        return widgets
+
+    def _build_recovery_row(self) -> dict[str, Any]:
+        """復旧の1段（緑の「復旧」+ ホスト、グレーでトリガー名と期間、控えめなボタン）."""
+        bottom = self._trigger()
+        period = self._recovery_period()
+        if period:
+            bottom += f"\u3000{html.escape(period)}"
+
+        row: dict[str, Any] = {
+            "startIcon": {"materialIcon": {"name": "check_circle"}},
+            "text": (
+                f'<font color="{self._RECOVERY_HEX}"><b>復旧</b></font>\u3000'
+                f'<font color="{self._MUTED_HEX}">{html.escape(self._host())}</font>'
+            ),
+            "bottomLabel": bottom,
+            "wrapText": True,
+        }
+        link_url = self._link_url()
+        if link_url:
+            row["button"] = {
+                "text": "Zabbix",
+                "type": "BORDERLESS",
+                "onClick": {"openLink": {"url": link_url}},
+            }
+        return {"decoratedText": row}
+
+    def _recovery_period(self) -> str:
+        """発生から復旧までの期間（例: 2026.03.11 18:00 - 18:05（5分））を返す.
+
+        日時を解釈できない場合は Zabbix から受け取った文字列をそのまま並べる。
+        """
+        event = self._event
+        try:
+            start = datetime.strptime(event.event_datetime, self._ZABBIX_DATETIME_FORMAT)
+            end = datetime.strptime(event.recovery_datetime, self._ZABBIX_DATETIME_FORMAT)
+        except ValueError:
+            return " - ".join(v for v in (event.event_datetime, event.recovery_datetime) if v)
+
+        end_format = "%H:%M" if start.date() == end.date() else "%Y.%m.%d %H:%M"
+        return (
+            f"{start:%Y.%m.%d %H:%M} - {end.strftime(end_format)}"
+            f"（{_format_duration(int((end - start).total_seconds()))}）"
+        )
+
+
+def _hex_to_color(hex_color: str) -> dict[str, float]:
+    """#rrggbb を Chat API の Color（RGB 0〜1）に変換する."""
+    value = hex_color.lstrip("#")
+    red, green, blue = (int(value[i : i + 2], 16) / 255 for i in (0, 2, 4))
+    return {"red": red, "green": green, "blue": blue, "alpha": 1.0}
+
+
+def _format_duration(seconds: int) -> str:
+    """秒数を「5分」「2時間10分」「3日4時間」の形式にする."""
+    minutes = max(seconds, 0) // 60
+    days, rest = divmod(minutes, 24 * 60)
+    hours, mins = divmod(rest, 60)
+    if days:
+        return f"{days}日{hours}時間"
+    if hours:
+        return f"{hours}時間{mins}分"
+    return f"{mins}分"
+
+
 # スタイル値 → ビルダークラスのマッピング
 _BUILDERS: dict[str, type[_CardBuilderBase]] = {
     CardStyle.DETAILED.value: GoogleChatCardBuilder,
     CardStyle.MEDIUM.value: MediumCardBuilder,
     CardStyle.COMPACT.value: CompactCardBuilder,
     CardStyle.TEXT.value: PlainTextBuilder,
+    CardStyle.HEADLINE.value: HeadlineCardBuilder,
 }
 
 
@@ -518,7 +687,7 @@ def build_payload(event: ZabbixEvent, style: str) -> dict[str, Any]:
 
     Args:
         event: Zabbixイベントデータ
-        style: メッセージスタイル（detailed / medium / compact / text）
+        style: メッセージスタイル（detailed / medium / compact / text / headline）
 
     Returns:
         Google Chat Webhook へ送信するペイロード辞書

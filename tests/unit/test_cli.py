@@ -177,6 +177,33 @@ class TestMain:
 
         assert result == EXIT_SUCCESS
 
+    def test_sendto_url_overrides_config_yaml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """argv[0] の URL は config.yaml の URL より優先して送信先になる."""
+        yaml_path = _make_config_yaml(tmp_path, webhook_url="https://chat.googleapis.com/yaml")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
+        argv = ["https://chat.googleapis.com/sendto"] + self._VALID_ARGV[1:]
+        monkeypatch.setattr("sys.argv", ["prog"] + argv)
+
+        mock_response = MagicMock()
+        mock_response.retry_count = 0
+        mock_response.elapsed_ms = 50.0
+
+        with patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_sender_cls:
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender.send.return_value = mock_response
+            mock_sender_cls.return_value = mock_sender
+
+            result = main()
+
+        assert result == EXIT_SUCCESS
+        assert (
+            mock_sender_cls.call_args.kwargs["webhook_url"] == "https://chat.googleapis.com/sendto"
+        )
+
     def test_parse_error_insufficient_args(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """異常系: 引数が不足している場合、EXIT_PARSE_ERROR を返す."""
         monkeypatch.setattr("sys.argv", ["prog", "only_one_arg"])
@@ -415,3 +442,131 @@ class TestMain:
         assert len(captured_calls) == 1
         _event, style = captured_calls[0]
         assert style == "medium"
+
+
+# ---- Chat API 送信のテスト ----
+
+
+class TestMainChatApi:
+    @staticmethod
+    def _setup(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, alert_type: str, event_id: str = "123"
+    ) -> None:
+        credentials = tmp_path / "sa.json"
+        credentials.write_text("{}", encoding="utf-8")
+        data = {
+            "googlechat": {"space": "spaces/AAAA", "credentials_file": str(credentials)},
+            "logging": {"level": "INFO"},
+        }
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(yaml.dump(data), encoding="utf-8")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_file))
+        monkeypatch.delenv("GCHAT_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GCHAT_SPACE", raising=False)
+        body = (
+            f"ALERT_TYPE={alert_type}\nHOST_NAME=web01\nTRIGGER_NAME=CPU高負荷\n"
+            f"TRIGGER_SEVERITY=High\nEVENT_ID={event_id}"
+        )
+        monkeypatch.setattr("sys.argv", ["prog", "", "subject", body])
+
+    @staticmethod
+    def _run(success: bool = True) -> tuple[int, MagicMock, MagicMock]:
+        mock_response = MagicMock()
+        mock_response.success = success
+        mock_response.status_code = 200 if success else 409
+        mock_response.retry_count = 0
+        mock_response.elapsed_ms = 50.0
+
+        with (
+            patch("zabbix_googlechat.chat_api_sender.GoogleChatApiSender") as mock_sender_cls,
+            patch("zabbix_googlechat.cli.GoogleChatWebhookSender") as mock_webhook_cls,
+        ):
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender.create.return_value = mock_response
+            mock_sender.upsert.return_value = mock_response
+            mock_sender_cls.return_value = mock_sender
+
+            result = main()
+
+        return result, mock_sender, mock_webhook_cls
+
+    def test_problem_creates_message_with_event_id(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "PROBLEM")
+        result, sender, webhook_cls = self._run()
+        assert result == EXIT_SUCCESS
+        assert sender.create.call_args.args[1] == "client-zbx-123"
+        sender.upsert.assert_not_called()
+        webhook_cls.assert_not_called()
+
+    def test_recovery_updates_problem_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "RECOVERY")
+        result, sender, _ = self._run()
+        assert result == EXIT_SUCCESS
+        payload, message_id = sender.upsert.call_args.args
+        assert message_id == "client-zbx-123"
+        assert "RECOVERY" in payload["cardsV2"][0]["card"]["header"]["title"]
+        sender.create.assert_not_called()
+
+    def test_update_creates_new_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "UPDATE")
+        result, sender, _ = self._run()
+        assert result == EXIT_SUCCESS
+        assert sender.create.call_args.args[1] is None
+        sender.upsert.assert_not_called()
+
+    def test_recovery_without_event_id_creates_new_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "RECOVERY", event_id="")
+        result, sender, _ = self._run()
+        assert result == EXIT_SUCCESS
+        assert sender.create.call_args.args[1] is None
+        sender.upsert.assert_not_called()
+
+    def test_unsuccessful_response_returns_send_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "PROBLEM")
+        result, _, _ = self._run(success=False)
+        assert result == EXIT_SEND_ERROR
+
+    def test_invalid_credentials_returns_config_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """鍵ファイルの中身が不正な場合は設定エラー."""
+        self._setup(tmp_path, monkeypatch, "PROBLEM")
+        assert main() == EXIT_CONFIG_ERROR
+
+    def test_sendto_space_uses_chat_api(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """{ALERT.SENDTO} のスペース名は config.yaml の Webhook URL より優先して API で送る."""
+        credentials = tmp_path / "sa.json"
+        credentials.write_text("{}", encoding="utf-8")
+        yaml_path = _make_config_yaml(tmp_path)
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        data["googlechat"]["credentials_file"] = str(credentials)
+        yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+        monkeypatch.setenv(_ENV_CONFIG_PATH, str(yaml_path))
+        monkeypatch.delenv("GCHAT_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GCHAT_SPACE", raising=False)
+        monkeypatch.setattr(
+            "sys.argv", ["prog", "spaces/SENDTO", "s", "ALERT_TYPE=PROBLEM\nEVENT_ID=7"]
+        )
+        with patch("zabbix_googlechat.chat_api_sender.GoogleChatApiSender") as mock_sender_cls:
+            mock_sender = MagicMock()
+            mock_sender.__enter__ = MagicMock(return_value=mock_sender)
+            mock_sender.__exit__ = MagicMock(return_value=False)
+            mock_sender_cls.return_value = mock_sender
+            result = main()
+        assert result == EXIT_SUCCESS
+        assert mock_sender_cls.call_args.kwargs["space"] == "spaces/SENDTO"
+        assert mock_sender.create.call_args.args[1] == "client-zbx-7"
