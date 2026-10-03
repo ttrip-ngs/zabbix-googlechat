@@ -267,12 +267,12 @@ def main() -> int:
         return EXIT_CONFIG_ERROR
 
     except WebhookPayloadError as e:
-        logger.error("Webhookペイロードエラー: %s (status=%d)", e, e.status_code)
+        logger.error("送信ペイロードエラー: %s (status=%d)", e, e.status_code)
         print(f"送信エラー (HTTP {e.status_code}): {e}", file=sys.stderr)
         return EXIT_SEND_ERROR
 
     except WebhookConnectionError as e:
-        logger.error("Webhook接続エラー: %s (retry=%d)", e, e.retry_count)
+        logger.error("送信接続エラー: %s (retry=%d)", e, e.retry_count)
         print(f"送信エラー (接続失敗): {e}", file=sys.stderr)
         return EXIT_SEND_ERROR
 

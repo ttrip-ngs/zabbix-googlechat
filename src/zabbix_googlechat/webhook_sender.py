@@ -121,7 +121,7 @@ class _RetryingSender:
                 elapsed_ms = (time.monotonic() - start_time) * 1000
 
                 logger.debug(
-                    "Webhook送信レスポンス: status=%d, elapsed=%.1fms",
+                    "送信レスポンス: status=%d, elapsed=%.1fms",
                     response.status_code,
                     elapsed_ms,
                 )
@@ -137,7 +137,7 @@ class _RetryingSender:
                 # 成功
                 if response.status_code == 200:  # noqa: PLR2004
                     logger.info(
-                        "Webhook送信成功: status=%d, elapsed=%.1fms, retry=%d",
+                        "送信成功: status=%d, elapsed=%.1fms, retry=%d",
                         response.status_code,
                         elapsed_ms,
                         retry_count,
@@ -153,7 +153,7 @@ class _RetryingSender:
                 # サーバーエラー（リトライ対象）
                 if response.status_code in _RETRYABLE_STATUS_CODES:
                     logger.warning(
-                        "Webhook送信失敗（リトライ対象）: HTTP %d, retry=%d/%d",
+                        "送信失敗（リトライ対象）: HTTP %d, retry=%d/%d",
                         response.status_code,
                         retry_count,
                         self._max_retries,
@@ -185,7 +185,7 @@ class _RetryingSender:
             except self._retryable_errors as e:
                 elapsed_ms = (time.monotonic() - start_time) * 1000
                 logger.warning(
-                    "Webhook接続エラー: %s, retry=%d/%d",
+                    "接続エラー: %s, retry=%d/%d",
                     e,
                     retry_count,
                     self._max_retries,
@@ -196,7 +196,7 @@ class _RetryingSender:
 
             except RequestException as e:
                 elapsed_ms = (time.monotonic() - start_time) * 1000
-                logger.error("Webhookリクエストエラー: %s", e)
+                logger.error("送信リクエストエラー: %s", e)
                 raise WebhookConnectionError(
                     f"Webhookリクエストエラー: {e}",
                     retry_count=retry_count,
