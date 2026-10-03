@@ -137,7 +137,7 @@ Zabbixアラートイベントの全情報を保持するデータクラス。
 
 #### CardStyle (Enum)
 
-Google Chat メッセージの表示スタイル。`detailed` / `medium` / `compact` / `text` の4値。
+Google Chat メッセージの表示スタイル。`detailed` / `medium` / `compact` / `text` / `headline` の5値。
 既定は `detailed`。未知の値は `detailed` にフォールバックする。
 
 プロパティ:
@@ -483,7 +483,7 @@ zabbix_notify.py <ALERT.SENDTO> <ALERT.SUBJECT> <ALERT.MESSAGE>
 
 ## 5. Google Chat 送信ペイロード形式
 
-メッセージスタイル（`card_style`）により4種類のペイロード形式を出力する。
+メッセージスタイル（`card_style`）により5種類のペイロード形式を出力する。
 スタイルの選択方法と優先順位は §6 を参照。
 
 ### 5.1 detailed スタイル（既定）
@@ -559,6 +559,18 @@ Zabbixリンクは本文末尾にURLを記載する。
 }
 ```
 
+### 5.4.1 headline スタイル
+
+チャットを開いたとき障害中のものに目が行くようにするスタイル。絵文字を使わない。
+
+- PROBLEM / UPDATE: ヘッダー `【障害】<ホスト>`（UPDATE は `【更新】`）、サブタイトル `重要度 <重要度>`、
+  textParagraph にトリガー名（状態色の太字）と「発生・現在値（・確認者・コメント）」の1行、
+  状態色の塗りつぶしボタン（`type: FILLED`, `color`）
+- RECOVERY: ヘッダーなしの decoratedText 1段。`text` に緑の「復旧」とグレーのホスト名、
+  `bottomLabel` にトリガー名と期間（`2026.03.11 18:00 - 18:30（30分）`）、枠なしボタン（`BORDERLESS`）。
+  Chat API 送信では障害メッセージがこの形に置き換わる
+- textParagraph / decoratedText は HTML として解釈されるため、Zabbix 由来の値は HTML エスケープする
+
 ### 5.5 Webhook URL形式
 
 ```
@@ -583,7 +595,7 @@ googlechat:
   timeout: 10              # HTTPタイムアウト（秒）
   max_retries: 3           # 最大リトライ回数
   retry_delay: 1.0         # リトライ間隔基準値（秒）
-  card_style: detailed     # detailed / medium / compact / text
+  card_style: detailed     # detailed / medium / compact / text / headline
   space: ""                # Chat API の送信先（spaces/XXXX）。設定すると Chat API で送信
   credentials_file: ""     # サービスアカウント鍵(JSON)のパス
   message_id_prefix: zbx   # Chat API のメッセージID接頭辞

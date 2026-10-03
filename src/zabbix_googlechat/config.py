@@ -63,7 +63,7 @@ class NotificationConfig:
     timeout: int = _DEFAULT_TIMEOUT
     max_retries: int = _DEFAULT_MAX_RETRIES
     retry_delay: float = _DEFAULT_RETRY_DELAY
-    # メッセージスタイル（detailed / medium / compact / text）
+    # メッセージスタイル（detailed / medium / compact / text / headline）
     card_style: str = DEFAULT_CARD_STYLE
 
     # Google Chat API 設定（space を設定すると API で送信する）

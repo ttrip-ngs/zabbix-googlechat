@@ -85,7 +85,7 @@ googlechat:
   timeout: 10
   max_retries: 3
   retry_delay: 1.0
-  card_style: detailed   # detailed / medium / compact / text
+  card_style: detailed   # detailed / medium / compact / text / headline
 
 zabbix:
   url: "https://zabbix.example.com"
@@ -105,7 +105,7 @@ Zabbixのメディアタイプ設定で、ユーザーメディアの「送信�
 
 ## 3.5 メッセージスタイルの選択
 
-Google Chat に送信するメッセージは4種類のスタイルから選べる。スペースの占有が大きい場合は
+Google Chat に送信するメッセージは5種類のスタイルから選べる。スペースの占有が大きい場合は
 `compact` や `text` を使うと一覧性が向上する。
 
 | スタイル | 説明 |
@@ -114,6 +114,7 @@ Google Chat に送信するメッセージは4種類のスタイルから選べ�
 | `medium` | 2セクション構造を維持しつつ各項目を1行に圧縮 |
 | `compact` | ヘッダー + 本文1枚 + ボタンに集約 |
 | `text` | カードを使わないプレーンテキスト。最小スペース |
+| `headline` | 見出しに状態とホスト、本文にトリガー名。絵文字なし。復旧は1段に畳んでグレー表示（Chat API 送信と組み合わせると障害中のものだけが目立つ） |
 
 選択方法（優先順位は上が高い）:
 

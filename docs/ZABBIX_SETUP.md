@@ -212,7 +212,7 @@ ITEM_LASTVALUE={ITEM.LASTVALUE}
 ### 4.5 メッセージスタイルの指定（任意）
 
 メッセージ本文に `CARD_STYLE` 行を追加すると、そのアクションだけ別スタイルで通知できる。
-値は `detailed` / `medium` / `compact` / `text` のいずれか。省略時は設定ファイル
+値は `detailed` / `medium` / `compact` / `text` / `headline` のいずれか。省略時は設定ファイル
 （`config.yaml` の `card_style` / 環境変数 `GCHAT_CARD_STYLE`、既定 `detailed`）の値が使われる。
 
 例: 復旧通知だけコンパクト表示にする場合、RECOVERYのメッセージ本文に以下を追加する。
@@ -351,11 +351,25 @@ Webhook 送信では復旧時にも通知が届いていたため、復旧を通
 
 1. Google Cloud コンソールで対象プロジェクトの「Google Chat API」を有効にする
 2. 「IAM と管理 > サービスアカウント」でサービスアカウントを作成する（ロールの付与は不要）
-3. 作成したサービスアカウントの「鍵 > 鍵を追加 > 新しい鍵を作成 > JSON」で鍵をダウンロードする
-4. 「Google Chat API > 構成」で Chat アプリを設定する
+3. 作成したサービスアカウントの「鍵 > 鍵を追加 > 新しい鍵を作成 > JSON」で鍵をダウンロードする。
+   組織ポリシー `iam.disableServiceAccountKeyCreation` が有効だと作成できない（2024年以降の組織は既定で有効）。
+   組織ポリシー管理者（`roles/orgpolicy.policyAdmin`）がプロジェクト単位で例外にし、鍵の作成後に戻す。
+   作成済みの鍵はポリシーを戻しても使える
+
+   ```bash
+   gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=<PROJECT_ID>
+   # 鍵の作成後
+   gcloud resource-manager org-policies delete iam.disableServiceAccountKeyCreation --project=<PROJECT_ID>
+   ```
+4. 「Google Chat API > 管理 > 構成」で Chat アプリを設定して保存する
+   - 「この Chat アプリを Workspace アドオンとしてビルドします」のチェックを外す（外すと元に戻せない）
    - アプリ名・アバターURL・説明を入力する
-   - 機能で「スペースとグループの会話に参加する」を有効にする（無効だとスペースに追加できない）
+   - 「インタラクティブ機能を有効にする」をオンにする（オフだとスペースの「アプリを追加」で検索に出ない）
+   - 機能で「スペースとグループの会話に参加する」にチェックする
+   - 接続設定で「HTTP エンドポイント URL」を選び、任意の HTTPS URL を入れる
+     （アプリ宛てのイベントは使わない。アプリにメンションすると応答しない旨が表示される）
    - 公開設定で、アプリをスペースに追加するユーザー（またはグループ）を指定する
+   - 保存できると上部のエラー表示が消える。検索に出るまで数分かかることがある
 5. 通知先のスペースを開き、「アプリと統合」から作成した Chat アプリを追加する
 6. スペースのURL `https://mail.google.com/chat/u/0/#chat/space/XXXXXXXX` の `XXXXXXXX` を控える。
    スペース名は `spaces/XXXXXXXX`

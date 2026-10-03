@@ -48,8 +48,25 @@ Webhook 送信では障害と復旧が別々のメッセージになる。Slack 
 - docs: ZABBIX_SETUP.md 8章（Google Cloud 側の準備・鍵の配置・動作確認）、CONFIGURATION / SPEC / README
 - バージョン 1.2.0
 
-## 未確認事項
+## 実スペースでの確認（2026-10-03）
 
-- ID 重複時の実際のステータス（409 / 400）。同じ PROBLEM を2回送って確認する
-- 実スペースでの送信・更新は未実施（Google Cloud プロジェクト・Chat アプリ・サービスアカウントが必要）。
-  Google Cloud コンソールの Chat アプリ構成手順（インタラクティブ機能・公開設定）は構築時に確定させる
+GCP プロジェクト crack-producer-510214-a1 の Chat アプリ「Zabbix」、試験用スペース GCP_API_TEST で確認。
+
+- PROBLEM: クライアント指定IDで投稿される
+- 同じ PROBLEM の再送: 409 が返り、IDなしで新規投稿される（ID重複は 409）
+- RECOVERY: 同じメッセージが更新される（createTime 不変、lastUpdateTime 更新）。updateMask=text,cardsV2 は受理される
+- 障害メッセージなしの RECOVERY: allowMissing で新規作成される
+- UPDATE: 新規投稿される
+
+構築時に分かったこと（ZABBIX_SETUP.md 8.3 に反映）:
+
+- 「Workspace アドオンとしてビルド」のチェックを外し、インタラクティブ機能をオン・「スペースとグループの会話に参加する」・
+  接続設定（ダミーの HTTPS URL）を設定しないと保存できず、スペースの「アプリを追加」で検索に出ない
+- 組織ポリシー iam.disableServiceAccountKeyCreation で鍵の作成が拒否された。組織ポリシー管理者が
+  プロジェクト単位で例外にして鍵を作成し、作成後に戻す
+
+## 表示（headline スタイル）
+
+実スペースで見た既定の detailed は「見にくい」「絵文字多用で幼く見える」との評価だったため、headline スタイルを追加した。
+見出し `【障害】ホスト`、トリガー名を状態色の太字、状態色の塗りつぶしボタン。復旧はヘッダーなしの1段に畳んでグレー表示し、
+チャットを開いたとき障害中のものに集中できるようにする。既存利用者の表示を変えないため既定は detailed のまま。
