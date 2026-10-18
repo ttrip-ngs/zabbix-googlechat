@@ -17,7 +17,7 @@ ZabbixのアラートイベントをGoogle Chatに通知する外部スクリプ
 
 ### 1.3 機能一覧
 
-- アラートタイプ別通知（PROBLEM / RECOVERY / UPDATE）
+- アラートタイプ別通知（PROBLEM / RECOVERY / UPDATE / REPORT）
 - 重要度別絵文字表示
 - Google Chat Card v2形式リッチカード通知
 - Webhook URL優先順位管理（{ALERT.SENDTO}(URLの場合) > 環境変数 > config.yaml）
@@ -91,6 +91,7 @@ scripts/zabbix_notify.py
 | `PROBLEM` | 障害発生 | 🔴 |
 | `RECOVERY` | 復旧 | 🟢 |
 | `UPDATE` | 確認・更新 | 🔵 |
+| `REPORT` | 定時の報告（見出しは「報告」） | 📋 |
 
 未知の値は `UPDATE` にフォールバックする。
 
