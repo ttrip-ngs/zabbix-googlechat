@@ -507,7 +507,7 @@ class PlainTextBuilder(_CardBuilderBase):
 class HeadlineCardBuilder(_CardBuilderBase):
     """headline スタイル: チャットを開いたとき障害中のものに目が行くようにする.
 
-    障害中・更新（見出し付き、トリガー名を状態色の太字、塗りつぶしボタン）:
+    障害中・更新・報告（見出し付き、トリガー名を状態色の太字、塗りつぶしボタン）:
         【障害】web01.example.com      ← 見出し（状態 + ホスト）
         重要度 High                    ← サブタイトル
         CPU使用率が高い                ← トリガー名（赤・太字）
@@ -525,12 +525,14 @@ class HeadlineCardBuilder(_CardBuilderBase):
         AlertType.PROBLEM: "障害",
         AlertType.RECOVERY: "復旧",
         AlertType.UPDATE: "更新",
+        AlertType.REPORT: "報告",
     }
 
-    # 障害中・更新の強調色（トリガー名の文字色とボタンの色）
+    # 障害中・更新・報告の強調色（トリガー名の文字色とボタンの色）
     _STATE_HEX: dict[AlertType, str] = {
         AlertType.PROBLEM: "#d93025",
         AlertType.UPDATE: "#1a73e8",
+        AlertType.REPORT: "#5f6368",
     }
 
     # 復旧の文字色（「復旧」は緑、それ以外はグレー）

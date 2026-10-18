@@ -15,6 +15,7 @@ class TestAlertType:
         assert AlertType.PROBLEM.value == "PROBLEM"
         assert AlertType.RECOVERY.value == "RECOVERY"
         assert AlertType.UPDATE.value == "UPDATE"
+        assert AlertType.REPORT.value == "REPORT"
 
     def test_all_alert_types_have_emoji(self) -> None:
         for alert_type in AlertType:

@@ -32,7 +32,8 @@ sudo bash scripts/install.sh
 
 ## 機能
 
-- アラートタイプ別の絵文字表示 (PROBLEM: 🔴, RECOVERY: 🟢, UPDATE: 🔵)
+- アラートタイプ別の絵文字表示 (PROBLEM: 🔴, RECOVERY: 🟢, UPDATE: 🔵, REPORT: 📋)
+  - REPORT は定時の報告用。見出しは `📋 [報告] <ホスト名>`。Chat API 送信でも新しいメッセージとして投稿し、あとで書き換えない
 - 重要度別の絵文字表示 (Disaster: 🔥, High: 🔴, Warning: 🟡, etc.)
 - Google Chat Card v2 形式のリッチカード通知
 - 5種類のメッセージスタイル（detailed / medium / compact / text / headline）をアクション単位で選択可能

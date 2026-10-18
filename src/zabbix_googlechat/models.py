@@ -12,6 +12,7 @@ class AlertType(str, Enum):
     PROBLEM = "PROBLEM"
     RECOVERY = "RECOVERY"
     UPDATE = "UPDATE"
+    REPORT = "REPORT"
 
 
 class CardStyle(str, Enum):
@@ -61,6 +62,7 @@ ALERT_TYPE_EMOJI: dict[AlertType, str] = {
     AlertType.PROBLEM: "🔴",
     AlertType.RECOVERY: "🟢",
     AlertType.UPDATE: "🔵",
+    AlertType.REPORT: "📋",
 }
 
 # アラートタイプ別表示名
@@ -68,6 +70,7 @@ ALERT_TYPE_LABEL: dict[AlertType, str] = {
     AlertType.PROBLEM: "PROBLEM",
     AlertType.RECOVERY: "RECOVERY",
     AlertType.UPDATE: "UPDATE",
+    AlertType.REPORT: "報告",
 }
 
 
