@@ -522,6 +522,18 @@ class TestMainChatApi:
         assert sender.create.call_args.args[1] is None
         sender.upsert.assert_not_called()
 
+    def test_report_creates_new_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._setup(tmp_path, monkeypatch, "REPORT")
+        result, sender, webhook_cls = self._run()
+        assert result == EXIT_SUCCESS
+        payload, message_id = sender.create.call_args.args
+        assert message_id is None
+        assert payload["cardsV2"][0]["card"]["header"]["title"] == "📋 [報告] web01"
+        sender.upsert.assert_not_called()
+        webhook_cls.assert_not_called()
+
     def test_recovery_without_event_id_creates_new_message(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

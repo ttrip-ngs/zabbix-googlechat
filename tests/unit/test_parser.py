@@ -77,6 +77,11 @@ class TestZabbixParamParser:
         assert event.ack_author == "admin"
         assert event.ack_message == "調査中"
 
+    def test_parse_report_message(self, parser: ZabbixParamParser) -> None:
+        event = parser.parse_message_body("ALERT_TYPE=REPORT\nHOST_NAME=efmon01")
+        assert event.alert_type == AlertType.REPORT
+        assert event.host_name == "efmon01"
+
     def test_parse_argv_success(self, parser: ZabbixParamParser) -> None:
         argv = [
             "https://chat.googleapis.com/webhook",

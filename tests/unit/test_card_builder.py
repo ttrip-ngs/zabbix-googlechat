@@ -64,6 +64,50 @@ def update_event() -> ZabbixEvent:
     )
 
 
+@pytest.fixture
+def report_event() -> ZabbixEvent:
+    """REPORT に無関係な復旧日時・確認者を入れ、表示されないことを確かめる."""
+    return ZabbixEvent(
+        alert_type=AlertType.REPORT,
+        host_name="efmon01",
+        trigger_name="サブ機の自動電源OFF結果",
+        trigger_severity=Severity.INFORMATION,
+        event_id="23456",
+        event_date="2026.10.18",
+        event_time="20:30:00",
+        recovery_date="2026.10.18",
+        recovery_time="20:31:00",
+        ack_author="admin",
+        ack_message="確認済み",
+        zabbix_url="https://zabbix.example.com",
+    )
+
+
+_REPORT_ONLY_FOR_OTHER_TYPES = ("20:31:00", "admin", "確認済み", "復旧", "確認者")
+
+
+@pytest.mark.parametrize("style", ["detailed", "medium", "compact"])
+def test_report_card_header(report_event: ZabbixEvent, style: str) -> None:
+    payload = build_payload(report_event, style)
+    assert payload["cardsV2"][0]["card"]["header"]["title"] == "📋 [報告] efmon01"
+    assert not any(word in str(payload) for word in _REPORT_ONLY_FOR_OTHER_TYPES)
+
+
+def test_report_text(report_event: ZabbixEvent) -> None:
+    text = PlainTextBuilder(report_event).build()["text"]
+    assert text.splitlines()[0] == "📋 [報告] efmon01"
+    assert not any(word in text for word in _REPORT_ONLY_FOR_OTHER_TYPES)
+
+
+def test_report_headline(report_event: ZabbixEvent) -> None:
+    card = HeadlineCardBuilder(report_event).build()["cardsV2"][0]["card"]
+    assert card["header"]["title"] == "【報告】efmon01"
+    body = card["sections"][0]["widgets"][0]["textParagraph"]["text"]
+    assert body.startswith('<font color="#5f6368"><b>サブ機の自動電源OFF結果</b></font>')
+    assert not any(word in str(card) for word in _REPORT_ONLY_FOR_OTHER_TYPES)
+    assert not any(ord(ch) >= 0x1F000 for ch in str(card))
+
+
 class TestGoogleChatCardBuilder:
     def test_build_returns_cards_v2(self, problem_event: ZabbixEvent) -> None:
         builder = GoogleChatCardBuilder(problem_event)

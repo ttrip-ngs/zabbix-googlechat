@@ -131,7 +131,7 @@ def _send_via_api(
 
     PROBLEM はイベントIDから決まるメッセージIDを付けて投稿し、RECOVERY は同じIDの
     メッセージを復旧内容で置き換える（障害メッセージが無ければ新規投稿になる）。
-    UPDATE（確認・コメント）は新しいメッセージとして投稿する。
+    UPDATE（確認・コメント）と REPORT（定時の報告）は新しいメッセージとして投稿する。
 
     Raises:
         ConfigurationError: サービスアカウント鍵を読み込めない場合

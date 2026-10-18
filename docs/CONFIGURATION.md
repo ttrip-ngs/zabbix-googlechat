@@ -296,11 +296,30 @@ ZABBIX_URL={$ZABBIX.URL}
 ITEM_LASTVALUE={ITEM.LASTVALUE}
 ```
 
-### 4.4 パラメータ詳細
+### 4.4 REPORT テンプレート
+
+定時の報告など、障害ではない知らせを送るときに使う。見出しは `📋 [報告] <ホスト名>`
+（headline スタイルは `【報告】<ホスト名>`）。復旧日時・確認者は表示しない。
+Chat API 送信でもメッセージIDを付けずに新しいメッセージとして投稿し、あとで書き換えない。
+
+```
+ALERT_TYPE=REPORT
+HOST_NAME={HOST.NAME}
+TRIGGER_NAME={TRIGGER.NAME}
+TRIGGER_DESCRIPTION={TRIGGER.DESCRIPTION}
+TRIGGER_SEVERITY={TRIGGER.SEVERITY}
+EVENT_ID={EVENT.ID}
+EVENT_DATE={EVENT.DATE}
+EVENT_TIME={EVENT.TIME}
+ZABBIX_URL={$ZABBIX.URL}
+ITEM_LASTVALUE={ITEM.LASTVALUE}
+```
+
+### 4.5 パラメータ詳細
 
 | キー | 対応Zabbixマクロ | 説明 |
 |---|---|---|
-| `ALERT_TYPE` | 固定値 | PROBLEM / RECOVERY / UPDATE のいずれか |
+| `ALERT_TYPE` | 固定値 | PROBLEM / RECOVERY / UPDATE / REPORT のいずれか（不明な値は UPDATE として扱う） |
 | `HOST_NAME` | {HOST.NAME} | アラート発生ホスト名 |
 | `TRIGGER_NAME` | {TRIGGER.NAME} | トリガー名 |
 | `TRIGGER_DESCRIPTION` | {TRIGGER.DESCRIPTION} | トリガーの説明（省略可） |
@@ -316,7 +335,7 @@ ITEM_LASTVALUE={ITEM.LASTVALUE}
 | `ITEM_LASTVALUE` | {ITEM.LASTVALUE} | 監視アイテムの最新値 |
 | `CARD_STYLE` | 固定値 | メッセージスタイルのアクション単位上書き（detailed / medium / compact / text / headline）。省略可 |
 
-### 4.5 アクション単位でスタイルを切り替える
+### 4.6 アクション単位でスタイルを切り替える
 
 メッセージ本文に `CARD_STYLE` を追加すると、そのアクションだけ別スタイルで通知できる。
 同一Zabbixサーバー内で、重大アラートは `detailed`、復旧通知は `compact` といった使い分けが可能。
